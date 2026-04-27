@@ -95,44 +95,44 @@ All four share a `PreservationHelper` that does the paired forward pass against 
 ## TARP / DCR — audio-video cross-attention mask
 
 **File:** [src/ltx_ic_lora_trainer/tarp_dcr.py](../src/ltx_ic_lora_trainer/tarp_dcr.py)
-**Flags:** `--tarp_enabled`, `--dcr_enabled` (also wired via [`networks/lora_ltx2.py`](../src/ltx_ic_lora_trainer/networks/lora_ltx2.py))
+**Flags:** `--tarp` + `--tarp_args`, `--dcr` + `--dcr_args` (also wired via [`networks/lora_ltx2.py`](../src/ltx_ic_lora_trainer/networks/lora_ltx2.py))
 **Imports from:** lazy, inside [`networks/lora_ltx2.py:518`](../src/ltx_ic_lora_trainer/networks/lora_ltx2.py#L518) and `LTX2NetworkTrainer._setup_tarp_dcr`
 
 Two related techniques from **"Improving Joint Audio-Video Generation with Cross-Modal Context Learning"**:
 
-- **TARP — Temporally Aligned RoPE Partitioning.** A windowed cross-attention mask that restricts each video frame to nearby audio tokens (and vice versa). Computed as an additive attention mask with `0.0` for attend and `-inf` for block; separate A→V and V→A masks. Controlled by `--tarp_window_multiplier`.
-- **DCR — Dynamic Context Routing.** Per-sample gradient detachment for mixed audio/video batches. Uses `--dcr_reference_detach` to control detach behaviour.
+- **TARP — Temporally Aligned RoPE Partitioning.** A windowed cross-attention mask that restricts each video frame to nearby audio tokens (and vice versa). Computed as an additive attention mask with `0.0` for attend and `-inf` for block; separate A→V and V→A masks. Configured via `--tarp_args window_multiplier=...`.
+- **DCR — Dynamic Context Routing.** Per-sample gradient detachment for mixed audio/video batches. Configured via `--dcr_args reference_detach=...`.
 
 Both are AV-only.
 
 **Example:**
 ```
---tarp_enabled --tarp_window_multiplier 3 --dcr_enabled
+--tarp --tarp_args window_multiplier=3 --dcr
 ```
 
 ## Modality freezer
 
 **File:** [src/ltx_ic_lora_trainer/modality_freezer.py](../src/ltx_ic_lora_trainer/modality_freezer.py)
-**Flags:** `--modality_freezer_ratio_threshold`, `--modality_freezer_warmup_steps`, `--modality_freeze_ema_decay`
+**Flags:** `--modality_freeze_check_interval`, `--modality_freeze_ratio_threshold`, `--modality_freeze_warmup_steps`, `--modality_freeze_ema_decay`
 **Imports from:** top-level in `base_trainer.py`
 
-"Sequential Modality Prioritization" (G2D-style). Monitors per-modality loss EMA during AV training. When one modality's loss is learning substantially faster than the other (ratio crosses `--modality_freezer_ratio_threshold`), the LoRA parameters for the dominant modality are **frozen** so the lagging modality can catch up without gradient interference.
+"Sequential Modality Prioritization" (G2D-style). Monitors per-modality loss EMA during AV training. When one modality's loss is learning substantially faster than the other (ratio crosses `--modality_freeze_ratio_threshold`, default 0.5), the LoRA parameters for the dominant modality are **frozen** so the lagging modality can catch up without gradient interference.
 
-Warms up for `--modality_freezer_warmup_steps` before activating. EMA decay controlled by `--modality_freeze_ema_decay` (default 0.99).
+Warms up for `--modality_freeze_warmup_steps` (default 100) before activating. EMA decay controlled by `--modality_freeze_ema_decay` (default 0.99).
 
-Off by default (`--modality_freezer_ratio_threshold` default 0 disables).
+Off by default — the disable knob is `--modality_freeze_check_interval` (default 0; set to a positive integer to enable and check every N steps).
 
 ## Cross-task synergy
 
 **File:** [src/ltx_ic_lora_trainer/cross_task_synergy.py](../src/ltx_ic_lora_trainer/cross_task_synergy.py)
-**Flags:** `--lambda_video_driven`, `--lambda_audio_driven`
+**Flags:** `--cts_lambda_video_driven`, `--cts_lambda_audio_driven`
 **Imports from:** top-level in `base_trainer.py`
 
 From **Harmony (2025)**. Adds auxiliary uni-directional denoising losses: one modality is held clean (timestep=0) while the other is noisy, then the model is asked to denoise. This provides a more stable cross-modal alignment signal than training on fully-noisy pairs, because one side always carries ground truth.
 
 Two directions:
-- **Video-driven** (`--lambda_video_driven 0.1`) — video is clean, model denoises audio conditioned on it
-- **Audio-driven** (`--lambda_audio_driven 0.3`) — audio is clean, model denoises video conditioned on it
+- **Video-driven** (`--cts_lambda_video_driven 0.1`) — video is clean, model denoises audio conditioned on it
+- **Audio-driven** (`--cts_lambda_audio_driven 0.3`) — audio is clean, model denoises video conditioned on it
 
 Both default to 0 (off).
 
@@ -149,7 +149,7 @@ Activated by selecting `ogm_ge` as the audio loss balance mode: `--audio_loss_ba
 ## Audio metrics
 
 **File:** [src/ltx_ic_lora_trainer/audio_metrics.py](../src/ltx_ic_lora_trainer/audio_metrics.py)
-**Flag:** `--audio_metrics_enabled` + `--audio_metrics_args key=value ...`
+**Flag:** `--audio_metrics` + `--audio_metrics_args key=value ...`
 **Imports from:** lazy, inside `LTX2NetworkTrainer._setup_audio_metrics`
 
 Audio-quality metrics logged to the training tracker:
@@ -184,7 +184,7 @@ Dynamic weighting of video/audio loss contributions during AV training. Four mod
 - **`none`** (default) — static weighting via `--video_loss_weight` / `--audio_loss_weight`
 - **`inv_freq`** — inversely proportional to how often audio batches appear in the sampler. If audio is undersampled, its loss is upweighted. Uses an EMA of audio batch frequency controlled by `--audio_loss_balance_beta`.
 - **`ema_mag`** — matches audio and video loss magnitudes to a target ratio (`--audio_loss_balance_target_ratio`) via EMA tracking (`--audio_loss_balance_ema_decay`).
-- **`uncertainty`** — learned per-modality log-variance weights (Kendall et al.). Each modality has its own uncertainty parameter trained with a dedicated LR (`--audio_loss_balance_uncertainty_lr`).
+- **`uncertainty`** — learned per-modality log-variance weights (Kendall et al.). Each modality has its own uncertainty parameter trained with a dedicated LR (`--uncertainty_lr`).
 - **`ogm_ge`** — gradient magnitude balancing (see OGM-GE section above).
 
 Guard rails: `--audio_loss_balance_min`, `--audio_loss_balance_max`, `--audio_loss_balance_eps`, `--audio_loss_balance_ema_init`.

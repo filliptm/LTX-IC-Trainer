@@ -32,7 +32,7 @@ End-to-end guide to the LTX-2 training pipeline, from raw dataset to trained LoR
 
 ## Modes
 
-Set via `--ltx2_mode` (or the legacy alias `--ltx_mode`). Accepts: `video`, `audio`, `av` (or single-letter `v`/`a`/`va`).
+Set via `--ltx2_mode` (or the legacy alias `--ltx_mode`). Accepts: `video`, `audio`, `av`. Inference also accepts the single-letter shortcuts `v`/`a`/`va` (normalised in [`ltx2_generate_video.py:199-202`](../src/ltx_ic_lora_trainer/ltx2_generate_video.py#L199-L202)); training validates the long form only ([`ltx2_train_network.py:1589-1596`](../src/ltx_ic_lora_trainer/ltx2_train_network.py#L1589-L1596)).
 
 - **`video`** — classic text-to-video. Only video latents are produced. Audio tokens/modules are not loaded.
 - **`audio`** — text-to-audio only. Pair with `--ltx2_audio_only_model` if your checkpoint is an audio-only variant.
@@ -144,15 +144,19 @@ The entry point for LoRA / LoHa / LoKr training. All flags come from [`ltx2_args
 6. **Optimizer & LR** — `--optimizer_type`, `--optimizer_args`, `--learning_rate`, `--lr_scheduler`, `--lr_warmup_steps`, `--lr_decay_steps`, `--gradient_accumulation_steps`, `--max_grad_norm`; group LR via `--group_lr_warmup_args`
 7. **Loss & schedule** — `--max_train_steps`, `--max_train_epochs`, `--timestep_sampling`, `--discrete_flow_shift`, `--weighting_scheme`, `--seed`
 8. **Shifted logit-normal sampling** — `--shifted_logit_mode` (`legacy` / `stretched`), `--shifted_logit_eps`, `--shifted_logit_uniform_prob`, `--shifted_logit_shift`
-9. **Audio handling** — `--separate_audio_buckets`, `--audio_bucket_strategy`, `--audio_bucket_interval`, `--video_loss_weight`, `--audio_loss_weight`, `--audio_loss_balance_mode` (`none`/`inv_freq`/`ema_mag`/`uncertainty`/`ogm_ge`), per-mode hyperparameters (`--audio_loss_balance_beta`, `--audio_loss_balance_eps`, `--audio_loss_balance_min`, `--audio_loss_balance_max`, `--audio_loss_balance_ema_init`, `--audio_loss_balance_target_ratio`, `--audio_loss_balance_ema_decay`, `--audio_loss_balance_uncertainty_lr`), `--ogm_ge_alpha`, `--ogm_ge_noise_std`, `--independent_audio_timestep`, `--audio_only_sequence_resolution`, `--audio_silence_regularizer*`, `--min_audio_batches_per_accum`, `--audio_batch_probability`, `--audio_supervision_mode` (`off`/`warn`/`error`) + thresholds
+9. **Audio handling** — `--separate_audio_buckets`, `--audio_bucket_strategy`, `--audio_bucket_interval`, `--video_loss_weight`, `--audio_loss_weight`, `--audio_loss_balance_mode` (`none`/`inv_freq`/`ema_mag`/`uncertainty`/`ogm_ge`), per-mode hyperparameters (`--audio_loss_balance_beta`, `--audio_loss_balance_eps`, `--audio_loss_balance_min`, `--audio_loss_balance_max`, `--audio_loss_balance_ema_init`, `--audio_loss_balance_target_ratio`, `--audio_loss_balance_ema_decay`, `--uncertainty_lr`), `--ogm_ge_alpha`, `--ogm_ge_noise_std`, `--independent_audio_timestep`, `--audio_only_sequence_resolution`, `--audio_silence_regularizer*`, `--min_audio_batches_per_accum`, `--audio_batch_probability`, `--audio_supervision_mode` (`off`/`warn`/`error`) + thresholds
 10. **First-frame conditioning (I2V)** — `--ltx2_first_frame_conditioning_p`
 11. **Preview sampling** — `--sample_prompts`, `--height`, `--width`, `--sample_num_frames`, `--sample_every_n_steps`, `--sample_every_n_epochs`, `--sample_with_offloading`, `--precache_sample_prompts`, `--use_precached_sample_prompts`, `--sample_prompts_cache`, `--use_precached_sample_latents`, `--sample_latents_cache`, `--sample_disable_audio`, `--sample_audio_only`, `--sample_disable_flash_attn`, `--sample_i2v_token_timestep_mask`, `--sample_audio_subprocess`, `--sample_merge_audio`, `--sample_include_reference`, `--reference_downscale`, `--reference_frames`, `--sample_two_stage`, `--spatial_upsampler_path`, `--distilled_lora_path`, `--sample_stage2_steps`, `--sample_tiled_vae`, `--sample_vae_tile_size*`
 12. **Checkpointing** — `--save_every_n_steps`, `--save_every_n_epochs`, `--save_state`, `--resume`, `--autoresume`, HuggingFace Hub upload flags
 13. **Quantisation** — `--fp8_base`, `--fp8_scaled`, `--fp8_w8a8`, `--w8a8_mode`, `--fp8_upcast*`, `--nf4_base`, `--nf4_block_size`, `--loftq_init`, `--loftq_iters`, `--awq_calibration`, `--awq_alpha`, `--awq_num_batches`, `--quantize_device`
 14. **LyCORIS** — `--lycoris_config`, `--init_lokr_norm`, `--lycoris_quantized_base_check_mode`
-15. **Research features** — each is a separate flag; see [research-features.md](research-features.md). Short list: `--crepa` + `--crepa_args`, `--self_flow` + `--self_flow_args`, `--hfato` + `--hfato_args`, `--blank_preservation`, `--dop`, `--prior_divergence`, `--audio_dop`, `--tarp_enabled`, `--dcr_enabled`, `--audio_metrics_enabled`
+15. **Research features** — each is a separate flag; see [research-features.md](research-features.md). Short list: `--crepa` + `--crepa_args`, `--self_flow` + `--self_flow_args`, `--hfato` + `--hfato_args`, `--blank_preservation`, `--dop`, `--prior_divergence`, `--audio_dop`, `--tarp` + `--tarp_args`, `--dcr` + `--dcr_args`, `--audio_metrics` + `--audio_metrics_args`
 16. **Logging** — `--logging_dir`, `--log_with` (`tensorboard`/`wandb`), `--log_prefix`, `--log_tracker_name`, `--log_tracker_config`, `--wandb_api_key`, `--log_timesteps_histogram`
 17. **Metadata** — `--training_comment` and other SS metadata keys
+
+### 4b. `ltx2_train.py` — alternative trainer (EMA + simpler init)
+
+Alternative entry point with a simpler init path and shadow-EMA model support. Same CLI surface as `ltx2_train_network.py` (parsed through [`ltx2_args.py`](../src/ltx_ic_lora_trainer/ltx2_args.py)). Most users should stick to `ltx2_train_network.py` (which is also what the webui invokes — see [`command_builder.build_training_cmd`](../src/ltx_ic_lora_trainer/webui/command_builder.py#L220)); reach for `ltx2_train.py` only if you specifically want its EMA path.
 
 ### 5. `ltx2_train_slider.py` — slider LoRA training
 

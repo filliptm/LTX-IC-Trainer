@@ -42,6 +42,8 @@ ltx-ic-lora-trainer/
 ├── README.md                   # User-facing intro + quick start
 ├── pyproject.toml              # Python deps, optional extras (cu124/cu128/cu130/webui), ruff config
 ├── run.bat                     # Windows double-click launcher for the webui
+├── .python-version             # uv / pyenv pin
+├── .gitignore
 ├── docs/                       # ← you are here
 │   ├── README.md               # Docs index
 │   ├── overview.md
@@ -73,7 +75,7 @@ ltx-ic-lora-trainer/
 │   ├── cache_latents.py, cache_text_encoder_outputs.py          # generic cache helpers (LTX-2-safe)
 │   ├── convert_lora.py                                          # LoRA format conversion
 │   ├── dataset/                # BaseDataset/VideoDataset/AudioDataset, audio_quota_sampler, config_utils
-│   ├── networks/               # lora_ltx2, lora (base), loha, lokr, lycoris_extensions, network_arch/config
+│   ├── networks/               # lora_ltx2, lora (base), loha, lokr, lycoris_extensions, network_arch.py, network_config.py, optimizer_params_compat.py
 │   ├── modules/                # nf4/fp8/w8a8 quant, loftq, awq, custom_offloading, group/lr schedulers, scheduling_flow_match_discrete
 │   ├── optimizers/             # automagic, optimizer_utils
 │   ├── utils/                  # safetensors_utils, device_utils, model_utils, lora_utils, train_utils,

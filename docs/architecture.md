@@ -34,12 +34,12 @@ ltx2_train_network.py      ← user entry point (via ltx2_args.py)
           ├── self_flow.py       (--self_flow)
           ├── hfato.py           (--hfato)
           ├── preservation.py    (--blank_preservation / --dop / --prior_divergence / --audio_dop)
-          ├── tarp_dcr.py        (--use_tarp / --use_dcr via networks/lora_ltx2.py)
+          ├── tarp_dcr.py        (--tarp / --dcr via networks/lora_ltx2.py)
           ├── modality_freezer.py (via base_trainer)
           ├── cross_task_synergy.py (via base_trainer)
           ├── ogm_ge.py          (via base_trainer)
           ├── audio_supervision.py (top-level import in ltx2_train_network)
-          ├── audio_metrics.py   (--audio_metrics_enabled)
+          ├── audio_metrics.py   (--audio_metrics)
           ├── audio_loss_balance.py (via base_trainer)
           ├── audio_io_utils.py  (via ltx2_cache_latents)
           └── audio_utils.py     (via ltx2_cache_latents, ltx2_sampling)
@@ -120,6 +120,11 @@ argparse definition for all LTX-2 training flags. `main()` parses, applies defau
 - **`ltx2_audio_preview.py`** — audio decode for preview samples
 - **`ltx2_text_conditioning.py`** — Gemma embedding / context preparation
 
+### Generic cache helpers (no `ltx2_` prefix)
+
+- **`cache_latents.py`** — generic latent caching helpers (LTX-2-safe after the strip-down). Imported by `ltx2_cache_latents.py`.
+- **`cache_text_encoder_outputs.py`** — generic text-encoder caching helpers. Imported by `ltx2_cache_text_encoder_outputs.py`.
+
 ## Dataset layer
 
 ### `dataset/config_utils.py`
@@ -184,12 +189,11 @@ The generic `LoRAModule` base class. Replaces the forward of `Linear` / `Conv2d`
 ## Quantisation + optimisation (`modules/`)
 
 - **`nf4_optimization_utils.py`** — NF4 (4-bit NormalFloat) quantisation. Packs 4-bit indices into uint8, per-block absmax scaling, QLoRA-style training support, safetensors lazy-loading with on-the-fly dequantisation.
-- **`fp8_optimization_utils.py`** — FP8 (E4M3 / E5M2) quantisation. Per-tensor or per-channel scales, monkey-patching for inference and safetensors loading.
+- **`fp8_optimization_utils.py`** — FP8 (E4M3 / E5M2) inference + training quantisation. Per-tensor or per-channel scales, monkey-patching for inference and safetensors loading.
 - **`w8a8_optimization_utils.py`** — Int8 weight + activation quantisation. Saves ~32MB per linear layer in the autograd graph. Two modes: `int8` (per-token activation quant + `torch._int_mm`, SM 7.5+) and `fp8` (transient dequant, any FP8-capable GPU).
 - **`loftq_init.py`** — LoftQ initialisation. SVD of the residual `W - dequant(Q(W))`, used to compensate NF4 quantisation error upfront. Better than random init for heavily-quantised base models.
 - **`awq_calibration.py`** — AWQ (Activation-aware Weight Quantisation). Per-channel activation L2 norm calibration → column scaling.
 - **`custom_offloading_utils.py`** — `Offloader` class: block-wise CPU ↔ GPU weight swapping with pinned memory, supports CPU/XPU/MPS device types.
-- **`fp8_optimization_utils.py`** — FP8 inference + training helpers
 - **`group_lr_scheduler.py`** — `GroupWarmupScheduler` for per-group LR warmup
 - **`lr_schedulers.py`** — `RexLR` and related LR schedulers
 - **`scheduling_flow_match_discrete.py`** — flow-match discrete scheduler (external, copyright header, kept via ruff exclude)
@@ -249,4 +253,4 @@ The LTX-2 model code itself. Structure:
 
 ## Webui (`webui/`)
 
-See [webui.md](webui.md) for the full breakdown. Short version: FastAPI backend (`server.py`, 8 routers, 39 routes) + React/Vite frontend (`frontend/` with TanStack Router, TanStack Query, Zustand, Tailwind, Recharts). JSONL-based metrics (`metrics_writer.py`). Reads and writes `project.json` files via `project_schema.py` (Pydantic v2). Builds LTX-2 CLI commands from project config via `command_builder.py` (~960 lines).
+See [webui.md](webui.md) for the full breakdown. Short version: FastAPI backend (`server.py`, 9 routers, ~50 routes) + React/Vite frontend (`frontend/` with TanStack Router, TanStack Query, Zustand, Tailwind, Recharts). JSONL-based metrics (`metrics_writer.py`). Reads and writes `project.json` files via `project_schema.py` (Pydantic v2). Builds LTX-2 CLI commands from project config via `command_builder.py` (~960 lines).

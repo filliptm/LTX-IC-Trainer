@@ -22,13 +22,13 @@ src/ltx_ic_lora_trainer/webui/
     └── src/
         ├── main.tsx, routeTree.gen.ts
         ├── routes/          # 2 file-based TanStack Router pages (Data, Train)
-        ├── components/ui/   # 11 shadcn-style primitives
+        ├── components/ui/   # 15 shadcn-style primitives
         ├── components/common/   # ProcessControls, ProcessConsole, CommandPreview
         ├── components/layout/   # IconRail, ContextPanel, ContextPanelContext, Header, Layout, SystemStrip
-        ├── features/project/    # HyperparameterAccordion + 8 section components
+        ├── features/project/    # HyperparameterPage + HyperparameterSidebar + TrainingActionRail + 8 section components
         ├── features/dataset/    # DatasetEntryCard (legacy)
-        ├── features/data/       # DatasetSidebar, DatasetWorkspace, DatasetToolbar, MediaGrid, MediaTile, DatasetSettings
-        ├── features/captions/   # MediaPreview (shared utility)
+        ├── features/data/       # DatasetSidebar, DatasetWorkspace, DatasetToolbar, MediaGrid, MediaTile, DatasetSettings, DatasetList, ProjectLoadDialog
+        ├── features/captions/   # MediaPreview, AssetBrowser, CaptionEditor
         ├── features/train/      # Terminal, StopEditResumeControls, Charts
         ├── features/validation/  # CheckpointList
         ├── hooks/               # useWebSocketLogs (per-process), useWebSocketHub (multiplexed)
@@ -118,6 +118,7 @@ usage: python -m ltx_ic_lora_trainer.webui [-h] [--port PORT] [--host HOST]
 | GET | `/api/dataset/{index}/assets` | List paired media assets with eagerly-loaded caption text and reference matching. Query: `caption_extension`, `limit`, `offset`. Returns `{total, assets: [{filename, type, size_bytes, has_caption, caption_text, has_reference, reference_filename}]}`. |
 | POST | `/api/dataset/{index}/upload` | Upload files to a dataset's target or reference directory. Form: `files`, `slot` ("target"\|"reference"), `caption_extension`. Target uploads auto-create blank caption files. |
 | GET | `/api/dataset/{index}/media/{file_path}` | Serve media from a dataset's target or reference directory. Query: `slot` ("target"\|"reference"). Path-traversal protected. |
+| GET | `/api/dataset/{index}/thumb/{file_path:path}` | Serve a thumbnail for a dataset media file (auto-generated for video and image assets, cached on disk). Path-traversal protected. |
 
 #### Processes — [`routers/processes.py`](../src/ltx_ic_lora_trainer/webui/routers/processes.py)
 
@@ -137,7 +138,7 @@ usage: python -m ltx_ic_lora_trainer.webui [-h] [--port PORT] [--host HOST]
 | POST | `/api/processes/pipeline/cancel` | Cancel the active pipeline (stops current step, prevents next). |
 | GET | `/api/processes/pipeline/status` | Pipeline state: `{active, current_step, current_type, total_steps, step_names}`. |
 
-Supported `proc_type` values: `cache_latents`, `cache_text`, `cache_dino`, `training`, `inference`, `slider_training`, `merge_lora`.
+Supported `proc_type` values: `cache_latents`, `cache_text`, `cache_dino`, `training`, `inference`, `slider_training`. (`merge_lora` is reserved as a slot in `ProcessManager` but no `build_merge_lora_cmd` exists yet — starting it returns `400 Unknown type: merge_lora`.)
 
 #### Filesystem — [`routers/filesystem.py`](../src/ltx_ic_lora_trainer/webui/routers/filesystem.py)
 
@@ -227,7 +228,8 @@ Pydantic v2. The single source of truth for `project.json` layout. Top-level cla
 - **`TrainingConfig`** — model selection (LTX-2 version, mode), quantisation (fp8/nf4/AWQ), LoRA config (rank, target preset), learning, optimisation, training loop settings
 - **`InferenceConfig`** — sampling knobs (guidance, num_videos, steps, etc.)
 - **`SliderConfig`** — slider mode, guidance, sample range, targets (`list[SliderTargetConfig]`)
-- **`ProjectMetadata`** — `name`, `project_dir`, `description`
+
+The top-level `ProjectConfig` itself carries `name` (default `"New Project"`) and the nested sections above. There is no separate `ProjectMetadata` class — name lives directly on `ProjectConfig`, and the project directory is tracked at the app-state level (see `server.py`'s `project_path`), not inside the schema.
 
 **Methods:**
 - `ProjectConfig.load(path: Path) → ProjectConfig` — deserialise project.json with validation
@@ -244,9 +246,9 @@ Any Pydantic model validators track enum constraints (e.g., `ltx2_mode ∈ {"vid
 | `build_cache_latents_cmd(config)` | `ltx2_cache_latents.py` |
 | `build_cache_text_cmd(config)` | `ltx2_cache_text_encoder_outputs.py` |
 | `build_cache_dino_cmd(config)` | `ltx2_cache_dino_features.py` |
-| `build_training_cmd(config)` | `ltx2_train.py` |
+| `build_training_cmd(config)` | `ltx2_train_network.py` (via `accelerate launch`; appends `--gui` so `metrics_writer` activates) |
 | `build_inference_cmd(config)` | `ltx2_generate_video.py` |
-| `build_slider_training_cmd(config)` | `ltx2_train_slider.py` |
+| `build_slider_training_cmd(config)` | `ltx2_train_slider.py` (via `accelerate launch`) |
 
 Each function reads the relevant section of `ProjectConfig` and produces a list of argv entries with conditional flags based on which features are enabled. **This is the definitive mapping between the project schema and the LTX-2 CLI surface.** If you add a new CLI flag to an LTX-2 script, you add a corresponding field to `project_schema.py` and a branch in the matching `build_*_cmd` function.
 
@@ -339,13 +341,13 @@ top-level pages; do not add more without explicit user approval.
 |---|---|---|
 | `__root.tsx` | root layout | Wraps everything in `<Layout>` + `<Outlet>` |
 | `index.tsx` | `/` (Data) | Dataset management. When no project is loaded, shows auto-discovered projects and manual load. When loaded, context panel shows `DatasetSidebar` (create/select/delete named datasets). Main area shows `DatasetWorkspace`: drag-and-drop upload toolbar, responsive media grid with target/reference pairs and inline caption editing, and a fixed right settings panel (resolution, batch, frames, etc.). Pre-caching is handled implicitly by the training pipeline — no separate caching UI. |
-| `training.tsx` | `/training` (Train) | Training control + hyperparameters + checkpoints/samples. When idle: **HyperparameterAccordion** prominently visible + StopEditResumeControls. When running: 6 status cards, 3 Recharts charts, WebSocket-backed Terminal, accordion collapsed in a `<details>`. Below: **Checkpoints & Samples** section showing checkpoint groups with resume buttons and validation sample grids. Context panel shows run info (state, step, speed, elapsed). |
+| `training.tsx` | `/training` (Train) | Training control + hyperparameters + checkpoints/samples. When idle: **HyperparameterPage** prominently visible + `StopEditResumeControls` (via `TrainingActionRail`). When running: 6 status cards, 3 Recharts charts, WebSocket-backed Terminal, accordion collapsed in a `<details>`. Below: **Checkpoints & Samples** section showing checkpoint groups with resume buttons and validation sample grids. Context panel shows run info (state, step, speed, elapsed) plus `HyperparameterSidebar` for quick navigation. |
 
 ### Components
 
 **UI primitives** — [`src/components/ui/`](../src/ltx_ic_lora_trainer/webui/frontend/src/components/ui/)
 
-Hand-written shadcn-style primitives. No `shadcn/ui` CLI — these are just 11 small files you can own and restyle.
+Hand-written shadcn-style primitives. No `shadcn/ui` CLI — these are just 15 small files you can own and restyle.
 
 | Component | Purpose |
 |---|---|
@@ -360,6 +362,10 @@ Hand-written shadcn-style primitives. No `shadcn/ui` CLI — these are just 11 s
 | `tabs.tsx` | `Tabs` + `TabsList` + `TabsTrigger` + `TabsContent` (context-based) |
 | `accordion.tsx` | `Accordion` + `AccordionItem` + `AccordionTrigger` + `AccordionContent` with `type="single" \| "multiple"` |
 | `separator.tsx` | Horizontal/vertical divider |
+| `dialog.tsx` | Modal dialog (Radix-style API: `Dialog`, `DialogContent`, `DialogHeader`, `DialogTitle`, `DialogDescription`, `DialogFooter`) |
+| `dropdown-menu.tsx` | Dropdown menu primitives |
+| `tooltip.tsx` | Hover tooltip with `TooltipProvider` + `TooltipTrigger` + `TooltipContent` |
+| `skeleton.tsx` | Loading skeleton placeholder block |
 
 **Common components** — [`src/components/common/`](../src/ltx_ic_lora_trainer/webui/frontend/src/components/common/)
 
@@ -373,7 +379,9 @@ Hand-written shadcn-style primitives. No `shadcn/ui` CLI — these are just 11 s
 
 | Component | Purpose |
 |---|---|
-| `HyperparameterAccordion` | Wraps 8 section components in a shadcn Accordion (`type="multiple"`). One RHF form with the full project config as default values. AccordionContent unmounts when closed so RHF only tracks the currently-visible subset of the ~200-field TrainingConfig. Save button calls `useUpdateProject().mutateAsync`. |
+| `HyperparameterPage` | Main training-config form. Wraps 8 section components in a shadcn Accordion (`type="multiple"`). One RHF form with the full project config as default values. AccordionContent unmounts when closed so RHF only tracks the currently-visible subset of the ~200-field TrainingConfig. Save button calls `useUpdateProject().mutateAsync`. |
+| `HyperparameterSidebar` | Context-panel rendering of the section list. Quick-jump nav into the open accordion item; mirrors the section order on the main page. |
+| `TrainingActionRail` | Sticky action rail surfacing Start / Stop / Pause / Resume controls plus pipeline (cache-then-train) status, alongside the form. |
 | `Section` / `SubGroup` | Layout wrappers for the inside of each accordion section. |
 | `FormFields` | TextField / TextAreaField / NumberField / SelectField / SwitchField. All bind to the ambient `useFormContext` so sections stay as dumb fragments. NumberField supports nullable (Pydantic Optional[int/float]) and integer vs float modes. |
 | `sections/*` | 8 section files: Basic, LoRA, Optimizer, Schedule, Memory (quantisation + attention + compile), Sampling, Validation, ResearchFeatures (CREPA, Self-Flow, HFATO, preservation, TARP/DCR, audio loss balance, audio metrics, modality freezer, cross-task synergy, audio supervision). |
@@ -408,17 +416,21 @@ Hand-written shadcn-style primitives. No `shadcn/ui` CLI — these are just 11 s
 | Component | Purpose |
 |---|---|
 | `DatasetSidebar` | Context panel content for the Data page. Lists named datasets as clickable cards with type icons and delete buttons. Inline create form (name + type) at top. Selected index stored in `uiStore.selectedDatasetIndex`. |
+| `DatasetList` | Card-based list of datasets in the loaded project (used inside `DatasetSidebar`). Surfaces dataset type, asset count, and active selection. |
 | `DatasetWorkspace` | Main workspace when a dataset is selected. Flex layout: media grid (flex-1) + settings panel (w-72 right). |
 | `DatasetToolbar` | Upload bar with drag-and-drop zone. Separate buttons for target and reference uploads. Search filter and asset count. |
 | `MediaGrid` | Responsive CSS grid of `MediaTile` components. 1-3 columns responsive. Fetches assets via `useDatasetAssets`. |
-| `MediaTile` | Single grid tile: target + reference media side-by-side (video hover-to-play, synced), inline caption textarea with auto-save on blur and Ctrl+S. Uses `GET /api/dataset/{index}/media/{path}` for serving. |
+| `MediaTile` | Single grid tile: target + reference media side-by-side (video hover-to-play, synced), inline caption textarea with auto-save on blur and Ctrl+S. Uses `GET /api/dataset/{index}/media/{path}` and `…/thumb/{path}` for serving. |
 | `DatasetSettings` | Fixed right panel (w-72) with dataset-level settings: type, resolution, batch size, repeats, caption extension, video-only options. Own `FormProvider` instance; saves via `PUT /api/project`. |
+| `ProjectLoadDialog` | Modal for loading a project by path or from the recent-projects list. Used from the empty-state on the Data page. |
 
 **Feature components — shared** ([`src/features/captions/`](../src/ltx_ic_lora_trainer/webui/frontend/src/features/captions/)):
 
 | Component | Purpose |
 |---|---|
 | `MediaPreview` | Renders `<video controls>`, `<img>`, or `<audio controls>` based on file type. Used as a shared utility. |
+| `AssetBrowser` | Paginated list of media assets in a directory with caption-status badges. Drives selection inside the captions workflow. |
+| `CaptionEditor` | Textarea editor for a caption file. Auto-saves on blur / Ctrl+S; uses `useSaveCaption()` and pushes a `caption_saved` event through the WebSocket hub. |
 
 **Feature components — Validation** ([`src/features/validation/`](../src/ltx_ic_lora_trainer/webui/frontend/src/features/validation/)):
 

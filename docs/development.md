@@ -7,7 +7,7 @@ How to set up a dev environment, run things, lint, and contribute.
 - **Python 3.10+** (pinned in [`pyproject.toml`](../pyproject.toml): `requires-python = ">=3.10"`)
 - **CUDA-capable GPU** with a driver matching one of the CUDA extras: 12.4, 12.8, or 13.0
 - **[uv](https://github.com/astral-sh/uv)** (recommended) or plain pip
-- For the webui frontend: **Node 20+** and **pnpm 9+** (install via `corepack enable && corepack use pnpm@10`)
+- For the webui frontend: **Node 20+** and **pnpm 10+** (install via `corepack enable && corepack use pnpm@10`)
 
 ## Installation
 
@@ -176,7 +176,6 @@ Commits should be small and scoped. Always include a co-author trailer when comm
 
 - **Windows `cp1252` encoding when capturing `--help` output**: pass `PYTHONIOENCODING=utf-8` to avoid `UnicodeEncodeError` on argparse help strings that contain Japanese characters.
 - **`sageattention` is commented out** in `pyproject.toml` deps (line 17) — it's not installed by default. Uncomment and reinstall if you want to use the sageattention backend.
-- **Sample generation during webui-launched training** writes no metrics/events to the dashboard because `command_builder.build_training_cmd` does not append `--gui`. See [webui.md § Known gaps](webui.md#known-gaps--follow-ups).
 
 ## Contributing
 
