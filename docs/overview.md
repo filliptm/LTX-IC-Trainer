@@ -41,7 +41,9 @@ ltx-ic-lora-trainer/
 ├── CLAUDE.md                   # AI-assistant contract (read first if you're an LLM)
 ├── README.md                   # User-facing intro + quick start
 ├── pyproject.toml              # Python deps, optional extras (cu124/cu128/cu130/webui), ruff config
-├── run.bat                     # Windows double-click launcher for the webui
+├── install.sh / install.bat    # One-shot installer (uv sync --extra cu128 --extra webui + pnpm build)
+├── run.sh / run.bat            # Launcher for the webui (`python -m ltx_ic_lora_trainer.webui`)
+├── projects/                   # App-managed projects directory (gitignored; created on first webui project)
 ├── .python-version             # uv / pyenv pin
 ├── .gitignore
 ├── docs/                       # ← you are here
@@ -86,6 +88,7 @@ ltx-ic-lora-trainer/
 │       ├── ws_hub.py           # multiplexed WebSocket hub (system, process, metrics, caption channels)
 │       ├── command_builder.py  # ProjectConfig → argv for ltx2_*.py scripts (960 lines)
 │       ├── project_schema.py   # Pydantic v2 config (521 lines)
+│       ├── paths.py            # REPO_ROOT + PROJECTS_DIR — single home for app-managed paths
 │       ├── process_manager.py  # subprocess mgr with Windows CTRL_BREAK_EVENT
 │       ├── metrics_writer.py   # JSONL metrics writer
 │       ├── toml_export.py      # dataset_config.toml / slider_config.toml serializer

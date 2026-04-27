@@ -281,6 +281,38 @@ async def delete_dataset(index: int, request: Request):
 
 
 # ---------------------------------------------------------------------------
+# PATCH /api/dataset/{index}/rename — rename the display name only
+# ---------------------------------------------------------------------------
+
+
+class DatasetRenameBody(BaseModel):
+    name: str
+
+
+@router.patch("/{index}/rename")
+async def rename_dataset(index: int, body: DatasetRenameBody, request: Request):
+    """Rename a dataset entry's display name in-place.
+
+    Only the ``name`` field changes. Directories on disk are *not* moved —
+    rewriting cache paths after a rename is brittle (cached safetensors
+    embed dataset directory paths in their metadata), so the slug-derived
+    directory layout is preserved as-is.
+    """
+    config = _get_config(request)
+    datasets = config.dataset.datasets
+    if index < 0 or index >= len(datasets):
+        raise HTTPException(status_code=404, detail=f"Dataset index {index} out of range")
+
+    new_name = body.name.strip()
+    if not new_name:
+        raise HTTPException(status_code=422, detail="name is required")
+
+    datasets[index].name = new_name
+    config.save()
+    return {"ok": True, "name": new_name}
+
+
+# ---------------------------------------------------------------------------
 # POST /api/dataset/{index}/thumbnail — set a dataset thumbnail
 # ---------------------------------------------------------------------------
 

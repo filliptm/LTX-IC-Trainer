@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Plus, Video, Image, AudioLines, Trash2, X, AlertTriangle } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Plus, Video, Image, AudioLines, Trash2, X, AlertTriangle, Pencil, MoreVertical } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 
@@ -12,10 +12,18 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogBody,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
+import { Label } from "@/components/ui/label";
 import { useProject } from "@/api/projects";
-import { useCreateDataset, useDeleteDataset } from "@/api/datasets";
+import { useCreateDataset, useDeleteDataset, useRenameDataset } from "@/api/datasets";
 import { useUIStore } from "@/stores/uiStore";
 import { cn } from "@/lib/utils";
 
@@ -42,6 +50,7 @@ export function DatasetSidebar() {
   const setSelected = useUIStore((s) => s.setSelectedDatasetIndex);
   const [showCreate, setShowCreate] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ index: number; name: string } | null>(null);
+  const [renameTarget, setRenameTarget] = useState<{ index: number; name: string } | null>(null);
   const deleteDataset = useDeleteDataset();
 
   const datasets = (
@@ -65,25 +74,33 @@ export function DatasetSidebar() {
     setDeleteTarget(null);
   };
 
+  // Most projects have exactly one dataset — collapse the list UI in that
+  // case so the sidebar shows the dataset's identity inline, with an
+  // "Add another dataset" link at the bottom for advanced cases (mixed
+  // media types, multiple IC-LoRA reference sets).
+  const isSingleDataset = datasets.length === 1 && !showCreate;
+
   return (
     <div className="flex h-full flex-col">
       <div className="relative flex h-10 shrink-0 items-center justify-center border-b border-border px-3">
         <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Datasets
+          {isSingleDataset ? "Dataset" : "Datasets"}
         </span>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="absolute right-2 h-7 w-7 p-0"
-              onClick={() => setShowCreate(!showCreate)}
-            >
-              {showCreate ? <X className="size-4" /> : <Plus className="size-4" />}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>{showCreate ? "Cancel" : "New dataset"}</TooltipContent>
-        </Tooltip>
+        {!isSingleDataset && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="absolute right-2 h-7 w-7 p-0"
+                onClick={() => setShowCreate(!showCreate)}
+              >
+                {showCreate ? <X className="size-4" /> : <Plus className="size-4" />}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{showCreate ? "Cancel" : "New dataset"}</TooltipContent>
+          </Tooltip>
+        )}
       </div>
 
       {showCreate && (
@@ -99,7 +116,7 @@ export function DatasetSidebar() {
       <div className="flex-1 overflow-y-auto scrollbar-thin">
         {datasets.length === 0 && !showCreate && (
           <div className="p-4 text-center text-xs text-muted-foreground">
-            No datasets yet. Click + to create one.
+            No dataset yet. Click + to add one.
           </div>
         )}
         <AnimatePresence initial={false}>
@@ -121,7 +138,9 @@ export function DatasetSidebar() {
                   name={displayName}
                   type={ds.type}
                   isActive={isActive}
+                  allowDelete={!isSingleDataset}
                   onSelect={() => setSelected(idx)}
+                  onRequestRename={() => setRenameTarget({ index: idx, name: displayName })}
                   onRequestDelete={() => setDeleteTarget({ index: idx, name: displayName })}
                 />
               </motion.div>
@@ -129,6 +148,20 @@ export function DatasetSidebar() {
           })}
         </AnimatePresence>
       </div>
+
+      {isSingleDataset && (
+        <button
+          onClick={() => setShowCreate(true)}
+          className="shrink-0 border-t border-border px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+        >
+          <span className="inline-flex items-center gap-1.5">
+            <Plus className="size-3" /> Add another dataset
+          </span>
+        </button>
+      )}
+
+      {/* Rename dialog */}
+      <RenameDatasetDialog target={renameTarget} onClose={() => setRenameTarget(null)} />
 
       {/* Delete confirmation dialog */}
       <Dialog open={deleteTarget !== null} onClose={() => setDeleteTarget(null)}>
@@ -172,47 +205,65 @@ function DatasetCard({
   name,
   type,
   isActive,
+  allowDelete,
   onSelect,
+  onRequestRename,
   onRequestDelete,
 }: {
   icon: typeof Video;
   name: string;
   type: string;
   isActive: boolean;
+  allowDelete: boolean;
   onSelect: () => void;
+  onRequestRename: () => void;
   onRequestDelete: () => void;
 }) {
   return (
-    <button
-      onClick={onSelect}
-      aria-label={`Select dataset ${name}`}
+    <div
       className={cn(
-        "group flex w-full items-center gap-2.5 px-3 py-2 text-left transition-all hover:bg-muted/60",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+        "group relative flex w-full items-center gap-2.5 px-3 py-2 transition-all hover:bg-muted/60",
         isActive && "bg-muted text-foreground",
       )}
     >
-      <Icon className="size-4 shrink-0 text-muted-foreground" />
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-sm">{name}</div>
-        <div className="text-[11px] text-muted-foreground">{type}</div>
-      </div>
-      <Tooltip>
-        <TooltipTrigger asChild>
+      <button
+        onClick={onSelect}
+        aria-label={`Select dataset ${name}`}
+        className={cn(
+          "flex flex-1 items-center gap-2.5 text-left",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+        )}
+      >
+        <Icon className="size-4 shrink-0 text-muted-foreground" />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm">{name}</div>
+          <div className="text-[11px] text-muted-foreground">{type}</div>
+        </div>
+      </button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
           <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onRequestDelete();
-            }}
-            className="hidden shrink-0 rounded p-0.5 text-muted-foreground hover:text-destructive group-hover:block"
-            aria-label="Remove dataset"
+            onClick={(e) => e.stopPropagation()}
+            className="hidden shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground group-hover:block focus:block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label="Dataset options"
           >
-            <Trash2 className="size-3.5" />
+            <MoreVertical className="size-3.5" />
           </button>
-        </TooltipTrigger>
-        <TooltipContent>Remove dataset</TooltipContent>
-      </Tooltip>
-    </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-40">
+          <DropdownMenuItem onSelect={onRequestRename}>
+            <Pencil className="size-3.5 shrink-0 text-muted-foreground" />
+            <span>Rename</span>
+          </DropdownMenuItem>
+          {allowDelete && (
+            <DropdownMenuItem destructive onSelect={onRequestDelete}>
+              <Trash2 className="size-3.5 shrink-0" />
+              <span>Delete</span>
+            </DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   );
 }
 
@@ -266,5 +317,80 @@ function CreateDatasetInline({
         </Button>
       </div>
     </form>
+  );
+}
+
+function RenameDatasetDialog({
+  target,
+  onClose,
+}: {
+  target: { index: number; name: string } | null;
+  onClose: () => void;
+}) {
+  const [name, setName] = useState("");
+  const renameDataset = useRenameDataset();
+
+  useEffect(() => {
+    if (target) setName(target.name);
+  }, [target]);
+
+  const open = target !== null;
+  const pending = renameDataset.isPending;
+  const trimmed = name.trim();
+  const canSubmit = !!target && trimmed.length > 0 && trimmed !== target.name && !pending;
+
+  const handleClose = () => {
+    if (!pending) onClose();
+  };
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!target || !canSubmit) return;
+    try {
+      await renameDataset.mutateAsync({ index: target.index, name: trimmed });
+      toast.success("Dataset renamed");
+      onClose();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to rename");
+    }
+  };
+
+  return (
+    <Dialog open={open} onClose={handleClose}>
+      <form onSubmit={handleSubmit}>
+        <DialogHeader>
+          <div className="flex items-center gap-2">
+            <div className="flex size-9 items-center justify-center rounded-full bg-primary/10">
+              <Pencil className="size-5 text-primary" />
+            </div>
+            <DialogTitle>Rename dataset</DialogTitle>
+          </div>
+          <DialogDescription>
+            Updates the display name only. Files and cache directories on
+            disk are left untouched so existing caches keep working.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogBody>
+          <div className="space-y-1.5">
+            <Label htmlFor="rename-dataset-name">New name</Label>
+            <Input
+              id="rename-dataset-name"
+              autoFocus
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              disabled={pending}
+            />
+          </div>
+        </DialogBody>
+        <DialogFooter>
+          <Button type="button" variant="outline" size="sm" onClick={handleClose} disabled={pending}>
+            Cancel
+          </Button>
+          <Button type="submit" size="sm" disabled={!canSubmit}>
+            {pending ? "Renaming…" : "Rename"}
+          </Button>
+        </DialogFooter>
+      </form>
+    </Dialog>
   );
 }

@@ -8,6 +8,7 @@ src/ltx_ic_lora_trainer/webui/
 ├── server.py               # FastAPI app factory
 ├── command_builder.py      # ProjectConfig → argv for ltx2_*.py scripts
 ├── project_schema.py       # Pydantic v2 config (ProjectConfig + nested sections)
+├── paths.py                # REPO_ROOT + PROJECTS_DIR constants (one home for the app-managed projects/ location)
 ├── process_manager.py      # subprocess manager with Windows CTRL_BREAK_EVENT + log broadcast
 ├── metrics_writer.py       # JSONL metrics writer
 ├── toml_export.py          # dataset_config.toml + slider_config.toml serializer
@@ -27,7 +28,7 @@ src/ltx_ic_lora_trainer/webui/
         ├── components/layout/   # IconRail, ContextPanel, ContextPanelContext, Header, Layout, SystemStrip
         ├── features/project/    # HyperparameterPage + HyperparameterSidebar + TrainingActionRail + 8 section components
         ├── features/dataset/    # DatasetEntryCard (legacy)
-        ├── features/data/       # DatasetSidebar, DatasetWorkspace, DatasetToolbar, MediaGrid, MediaTile, DatasetSettings, DatasetList, ProjectLoadDialog
+        ├── features/data/       # DatasetSidebar, DatasetWorkspace, DatasetToolbar, MediaGrid, MediaTile, DatasetSettings, DatasetList
         ├── features/captions/   # MediaPreview, AssetBrowser, CaptionEditor
         ├── features/train/      # Terminal, StopEditResumeControls, Charts
         ├── features/validation/  # CheckpointList
@@ -96,11 +97,15 @@ usage: python -m ltx_ic_lora_trainer.webui [-h] [--port PORT] [--host HOST]
 |---|---|---|
 | GET | `/api/project/schema` | Pydantic JSON schema for ProjectConfig (for frontend sync checks) |
 | GET | `/api/project` | Current loaded project: `{loaded, config, project_path}` |
-| POST | `/api/project` | Create a new project; saves `project.json` to disk |
+| POST | `/api/project` | Create a new project under `<repo_root>/projects/<slug>/`. Body: `{name}`. Any incoming `project_dir` is ignored — the location is app-managed. If a project with that slug already exists, a numeric suffix is appended (`_2`, `_3`, …). The project is seeded with a single default `DatasetEntry` (same name as the project, `type=video`) and its `datasets/<slug>/{target,reference,cache,cache_ref}/` directory tree, so the user lands directly on a usable workspace without an explicit dataset-create step. |
 | PUT | `/api/project` | Update the currently loaded project |
 | DELETE | `/api/project` | Close the project (clears app state) |
-| POST | `/api/project/load` | Load a project from a path (auto-resolves directory → `project.json`) |
-| GET | `/api/project/discover?root=&max_depth=3` | Recursively scan *root* (default: server CWD) for `project.json` files and dataset directories (dirs with media + caption files). Returns `{root, projects: [...], datasets: [...]}`. Each discovered dataset includes `siblings` (sibling dirs: cache, references, output, logs), `cache_status` (latent/text encoder cache counts), and `toml_config` (parsed from `dataset_config.toml` if present). |
+| POST | `/api/project/load` | Load a project from the app-managed projects directory. Body: `{slug}` *or* `{path}`. Paths outside `<repo_root>/projects/` are rejected with 400. |
+| POST | `/api/project/{slug}/rename` | Rename a project. Body: `{name}`. Renames the directory to the slugified new name (returns 409 if taken), rewrites every absolute path inside `project.json` that pointed at the old directory, and refreshes app state if this is the loaded project. Cache files keep working because their paths are part of the rewrite. |
+| DELETE | `/api/project/{slug}` | Permanently delete a project — `rm -rf` the entire directory. If this is the loaded project, app state is cleared first. |
+| POST | `/api/project/{slug}/thumbnail` | Upload a thumbnail image (multipart `file`, png/jpg/webp). Saved as `<project_dir>/thumbnail.<ext>` and recorded on `ProjectConfig.thumbnail`. Replacing a thumbnail with a different extension cleans up the old file. |
+| GET | `/api/project/{slug}/thumbnail` | Serve the project's thumbnail. 404 if none. |
+| GET | `/api/project/discover?root=&max_depth=3` | Recursively scan *root* for `project.json` files and dataset directories (dirs with media + caption files). When `root` is omitted, defaults to `<repo_root>/projects/` (auto-created on first call). Returns `{root, projects: [...], datasets: [...]}`. Each discovered project includes `slug`, `path`, `project_dir`, `mtime`, and `thumbnail` (absolute path or empty). Each discovered dataset includes `siblings` (sibling dirs: cache, references, output, logs), `cache_status` (latent/text encoder cache counts), and `toml_config` (parsed from `dataset_config.toml` if present). |
 | POST | `/api/project/auto-populate` | Body: `{dataset_index, discovered}`. Auto-fills a project's dataset entry paths (directory, cache, references, output, logs) and training config from a discovered dataset's sibling directory structure + TOML config. Saves project.json. |
 
 #### Datasets — [`routers/datasets.py`](../src/ltx_ic_lora_trainer/webui/routers/datasets.py)
@@ -115,6 +120,7 @@ usage: python -m ltx_ic_lora_trainer.webui [-h] [--port PORT] [--host HOST]
 | POST | `/api/dataset/create` | Create a named dataset with auto-managed directory structure under `{project_dir}/datasets/{slug}/`. Body: `{name, type}`. Returns `{ok, index, entry}`. |
 | DELETE | `/api/dataset/{index}` | Remove a dataset entry from the project (does not delete files on disk). |
 | POST | `/api/dataset/{index}/thumbnail` | Upload a thumbnail image for a dataset. Multipart: `file`. Returns `{ok, path}`. |
+| PATCH | `/api/dataset/{index}/rename` | Rename a dataset entry's display name. Body: `{name}`. Directories on disk are intentionally not moved — cache safetensors embed dataset directory paths in their metadata, so the slug-derived layout stays put. |
 | GET | `/api/dataset/{index}/assets` | List paired media assets with eagerly-loaded caption text and reference matching. Query: `caption_extension`, `limit`, `offset`. Returns `{total, assets: [{filename, type, size_bytes, has_caption, caption_text, has_reference, reference_filename}]}`. |
 | POST | `/api/dataset/{index}/upload` | Upload files to a dataset's target or reference directory. Form: `files`, `slot` ("target"\|"reference"), `caption_extension`. Target uploads auto-create blank caption files. |
 | GET | `/api/dataset/{index}/media/{file_path}` | Serve media from a dataset's target or reference directory. Query: `slot` ("target"\|"reference"). Path-traversal protected. |
@@ -229,7 +235,7 @@ Pydantic v2. The single source of truth for `project.json` layout. Top-level cla
 - **`InferenceConfig`** — sampling knobs (guidance, num_videos, steps, etc.)
 - **`SliderConfig`** — slider mode, guidance, sample range, targets (`list[SliderTargetConfig]`)
 
-The top-level `ProjectConfig` itself carries `name` (default `"New Project"`) and the nested sections above. There is no separate `ProjectMetadata` class — name lives directly on `ProjectConfig`, and the project directory is tracked at the app-state level (see `server.py`'s `project_path`), not inside the schema.
+The top-level `ProjectConfig` itself carries `name` (default `"New Project"`), `project_dir` (filled in on create), `thumbnail` (absolute path, set by `POST /api/project/{slug}/thumbnail`), and the nested sections above. There is no separate `ProjectMetadata` class — these fields live directly on `ProjectConfig`.
 
 **Methods:**
 - `ProjectConfig.load(path: Path) → ProjectConfig` — deserialise project.json with validation
@@ -340,7 +346,7 @@ top-level pages; do not add more without explicit user approval.
 | File | Path | Purpose |
 |---|---|---|
 | `__root.tsx` | root layout | Wraps everything in `<Layout>` + `<Outlet>` |
-| `index.tsx` | `/` (Data) | Dataset management. When no project is loaded, shows auto-discovered projects and manual load. When loaded, context panel shows `DatasetSidebar` (create/select/delete named datasets). Main area shows `DatasetWorkspace`: drag-and-drop upload toolbar, responsive media grid with target/reference pairs and inline caption editing, and a fixed right settings panel (resolution, batch, frames, etc.). Pre-caching is handled implicitly by the training pipeline — no separate caching UI. |
+| `index.tsx` | `/` (Data) | Dataset management. When no project is loaded, shows auto-discovered projects (under the app-managed `<repo_root>/projects/` directory) as 16:9 thumbnail tiles and a **New project** button (opens `CreateProjectDialog` → `POST /api/project`). Each tile has a hover-revealed `MoreVertical` menu with **Set/Change thumbnail** (file picker → `POST /api/project/{slug}/thumbnail`), **Rename** (opens `RenameProjectDialog` → `POST /api/project/{slug}/rename`), and **Delete** (opens `DeleteProjectDialog` → `DELETE /api/project/{slug}`). When loaded, context panel shows `DatasetSidebar` (rename/delete via per-card menu, plus the existing single-dataset behaviour). Main area shows `DatasetWorkspace`: drag-and-drop upload toolbar, responsive media grid with target/reference pairs and inline caption editing, and a fixed right settings panel (resolution, batch, frames, etc.). Pre-caching is handled implicitly by the training pipeline — no separate caching UI. |
 | `training.tsx` | `/training` (Train) | Training control + hyperparameters + checkpoints/samples. When idle: **HyperparameterPage** prominently visible + `StopEditResumeControls` (via `TrainingActionRail`). When running: 6 status cards, 3 Recharts charts, WebSocket-backed Terminal, accordion collapsed in a `<details>`. Below: **Checkpoints & Samples** section showing checkpoint groups with resume buttons and validation sample grids. Context panel shows run info (state, step, speed, elapsed) plus `HyperparameterSidebar` for quick navigation. |
 
 ### Components
@@ -407,7 +413,7 @@ Hand-written shadcn-style primitives. No `shadcn/ui` CLI — these are just 15 s
 | `IconRail` | **2-item** icon-only nav rail (`w-14` = 56px). Icons: `Database` (Data), `GraduationCap` (Train). Active state: left border accent + bg highlight. Tooltip on hover. |
 | `ContextPanel` | 224px-wide (`w-56`) slot-based detail panel. Renders whatever the active route provides via `ContextPanelContext`. Independent scroll. |
 | `ContextPanelContext` | React context + `useSetContextPanel(content)` hook. Each route calls this to populate the context panel. Uses `useLayoutEffect` to avoid flash during transitions. |
-| `Header` | Breadcrumb (`project_name / Page`) + `SystemStrip` + dark/light theme toggle. Height `h-10` (40px). |
+| `Header` | Breadcrumb (`project_name / Page`) + `SystemStrip` + dark/light theme toggle. Height `h-10` (40px). The project name is a clickable button — one click closes the loaded project (via `useCloseProject`) and routes to `/`, dropping the user back at the project tile grid. No dropdown; the empty Data page already lists every discovered project, so the breadcrumb just sends you there. |
 | `SystemStrip` | Live icon-based telemetry strip rendered inside `Header`. Fed by the WebSocket hub (fallback: 30s HTTP poll). Shows RAM used/total + mini-bar, primary GPU name + utilization + VRAM mini-bar, GPU temperature, disk free. Threshold coloring: ≥70% amber, ≥90% red (temperature: ≥75°C amber, ≥85°C red). Responsive: hides temp + disk below `lg`, hides entire strip below `sm`. Secondary GPUs collapse to a `+N` badge with a tooltip listing them. Errors render a `WifiOff` icon. |
 | `Layout` | Three-column shell: `IconRail` + `ContextPanel` + main column (`Header` + scrollable content). Mounts `useWebSocketHub()` for the entire app. Wraps children in `ContextPanelProvider`. |
 
@@ -415,14 +421,13 @@ Hand-written shadcn-style primitives. No `shadcn/ui` CLI — these are just 15 s
 
 | Component | Purpose |
 |---|---|
-| `DatasetSidebar` | Context panel content for the Data page. Lists named datasets as clickable cards with type icons and delete buttons. Inline create form (name + type) at top. Selected index stored in `uiStore.selectedDatasetIndex`. |
+| `DatasetSidebar` | Context panel content for the Data page. When the project has exactly one dataset (the default), shows the dataset's identity inline with the delete affordance hidden (rename is still available), plus an "Add another dataset" link at the bottom for advanced cases (mixed media types, multiple IC-LoRA reference sets). When more than one exists, reverts to the full multi-dataset list with a `+` button and per-card menu (Rename + Delete). Each card surfaces a `MoreVertical` menu on hover; rename opens `RenameDatasetDialog` → `PATCH /api/dataset/{index}/rename`. Selected index stored in `uiStore.selectedDatasetIndex`; the Data page auto-selects index 0 when nothing is selected. |
 | `DatasetList` | Card-based list of datasets in the loaded project (used inside `DatasetSidebar`). Surfaces dataset type, asset count, and active selection. |
 | `DatasetWorkspace` | Main workspace when a dataset is selected. Flex layout: media grid (flex-1) + settings panel (w-72 right). |
 | `DatasetToolbar` | Upload bar with drag-and-drop zone. Separate buttons for target and reference uploads. Search filter and asset count. |
 | `MediaGrid` | Responsive CSS grid of `MediaTile` components. 1-3 columns responsive. Fetches assets via `useDatasetAssets`. |
 | `MediaTile` | Single grid tile: target + reference media side-by-side (video hover-to-play, synced), inline caption textarea with auto-save on blur and Ctrl+S. Uses `GET /api/dataset/{index}/media/{path}` and `…/thumb/{path}` for serving. |
 | `DatasetSettings` | Fixed right panel (w-72) with dataset-level settings: type, resolution, batch size, repeats, caption extension, video-only options. Own `FormProvider` instance; saves via `PUT /api/project`. |
-| `ProjectLoadDialog` | Modal for loading a project by path or from the recent-projects list. Used from the empty-state on the Data page. |
 
 **Feature components — shared** ([`src/features/captions/`](../src/ltx_ic_lora_trainer/webui/frontend/src/features/captions/)):
 
@@ -488,12 +493,11 @@ Typed TanStack Query hooks, one file per backend router.
 
 The 2-page layout covers the full training loop end to end: create named datasets → upload and caption media → configure hyperparameters → launch training (auto-caches first) with live WebSocket streaming and charts → stop and tweak → resume from checkpoint → browse validation samples. A few things are still follow-ups:
 
-1. **No "New project" creation wizard** — the Data page auto-discovers `project.json` files via `GET /api/project/discover` and shows them as clickable cards. You can also load by path or from recent history. To create a new project, use `POST /api/project` with a JSON body, or write a `project.json` by hand.
-2. **Training form is still curated, not auto-generated** — `features/project/sections/` exposes the commonly-edited fields per section (Basic, LoRA, Optimizer, Schedule, Memory, Sampling, Validation, ResearchFeatures). The full `TrainingConfig` has ~200 fields; a handful of niche knobs (e.g. Self-Flow's 25 temporal/patch-level parameters, rarely-edited CREPA block indices) are intentionally not exposed as form inputs. You can still edit them by hand in `project.json`, and the accordion's Save button round-trips unknown fields untouched.
-3. **tqdm progress bars render as a stream of lines** — the terminal strips ANSI escapes and converts `\r` to `\n`, so tqdm's "rewrite in place" effect becomes "one line per update". Readable, just noisy.
-4. **Zod schema + Pydantic drift test** — still a follow-up. Currently the frontend treats `project.config` as `Record<string, unknown>` with ad-hoc reads.
-5. **No batch auto-captioning** — the Data page supports manual caption editing and file upload, but no automated caption generation (e.g. Florence-2). A future follow-up could add a "Run auto-caption" action.
-6. **Inference and slider training are CLI-only** — users launch these via `python -m ltx_ic_lora_trainer.ltx2_generate_video` / `ltx2_train_slider` directly.
+1. **Training form is still curated, not auto-generated** — `features/project/sections/` exposes the commonly-edited fields per section (Basic, LoRA, Optimizer, Schedule, Memory, Sampling, Validation, ResearchFeatures). The full `TrainingConfig` has ~200 fields; a handful of niche knobs (e.g. Self-Flow's 25 temporal/patch-level parameters, rarely-edited CREPA block indices) are intentionally not exposed as form inputs. You can still edit them by hand in `project.json`, and the accordion's Save button round-trips unknown fields untouched.
+2. **tqdm progress bars render as a stream of lines** — the terminal strips ANSI escapes and converts `\r` to `\n`, so tqdm's "rewrite in place" effect becomes "one line per update". Readable, just noisy.
+3. **Zod schema + Pydantic drift test** — still a follow-up. Currently the frontend treats `project.config` as `Record<string, unknown>` with ad-hoc reads.
+4. **No batch auto-captioning** — the Data page supports manual caption editing and file upload, but no automated caption generation (e.g. Florence-2). A future follow-up could add a "Run auto-caption" action.
+5. **Inference and slider training are CLI-only** — users launch these via `python -m ltx_ic_lora_trainer.ltx2_generate_video` / `ltx2_train_slider` directly.
 
 ## Extending the webui
 

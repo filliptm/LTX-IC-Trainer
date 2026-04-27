@@ -18,8 +18,11 @@ node_modules/
 
 # user data (not shipped with the repo)
 datasets/
-projects/
 references/
+
+# the webui's app-managed projects directory — every webui-created project
+# lives under <repo_root>/projects/, but the contents are user data
+projects/
 
 # runtime-generated dataset/slider TOMLs written by webui.toml_export
 # (location is configurable per project; these are the default fallback names)

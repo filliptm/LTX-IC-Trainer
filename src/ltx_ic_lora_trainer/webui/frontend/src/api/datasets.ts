@@ -57,6 +57,21 @@ export function useDeleteDataset() {
   });
 }
 
+export function useRenameDataset() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { index: number; name: string }) =>
+      api.patch<{ ok: boolean; name: string }>(
+        `/api/dataset/${vars.index}/rename`,
+        { name: vars.name },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["project"] });
+      qc.invalidateQueries({ queryKey: ["dataset"] });
+    },
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Dataset assets (paired media + captions)
 // ---------------------------------------------------------------------------

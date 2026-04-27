@@ -504,6 +504,7 @@ class ProjectConfig(BaseModel):
     version: int = 1
     name: str = "New Project"
     project_dir: str = ""
+    thumbnail: str = ""  # Optional path to a project-level thumbnail image
     model_dir: str = ""  # directory where downloaded models are stored
     dataset: DatasetConfig = Field(default_factory=DatasetConfig)
     caching: CachingConfig = Field(default_factory=CachingConfig)

@@ -11,7 +11,23 @@ How to set up a dev environment, run things, lint, and contribute.
 
 ## Installation
 
-### With uv (recommended)
+### One-shot install scripts
+
+For the common case (CUDA 12.8 + webui + frontend build), use the convenience scripts at the repo root:
+
+```bash
+./install.sh        # macOS / Linux
+install.bat         # Windows
+```
+
+Both run `uv sync --extra cu128 --extra webui` then build the webui frontend with pnpm. To pin a different CUDA wheel index, set `CUDA_EXTRA` before running (`cu124` / `cu128` / `cu130`). To skip the pnpm build (e.g. CLI-only install), set `SKIP_FRONTEND=1`.
+
+```bash
+CUDA_EXTRA=cu124 ./install.sh
+SKIP_FRONTEND=1 ./install.sh
+```
+
+### With uv directly
 
 Pick exactly one CUDA extra:
 
@@ -107,7 +123,7 @@ accelerate launch --mixed_precision bf16 -m ltx_ic_lora_trainer.ltx2_train_netwo
 python -m ltx_ic_lora_trainer.webui --host 127.0.0.1 --port 7860
 ```
 
-Or double-click [`run.bat`](../run.bat) on Windows — it activates `.venv/` and launches the above.
+Or use the launcher scripts at the repo root: [`run.sh`](../run.sh) on macOS / Linux, [`run.bat`](../run.bat) on Windows. Both activate `.venv/` if present and launch the webui. `run.sh` forwards extra args through to the webui (e.g. `./run.sh --dev`, `./run.sh --host 0.0.0.0`, `./run.sh --project path/to/project.json`).
 
 **Dev mode** with Vite hot reload:
 

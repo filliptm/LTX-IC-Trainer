@@ -63,15 +63,61 @@ export function useCloseProject() {
   });
 }
 
+export function useRenameProject() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { slug: string; name: string }) =>
+      api.post<{ ok: boolean; slug: string; name: string; project_path: string }>(
+        `/api/project/${encodeURIComponent(vars.slug)}/rename`,
+        { name: vars.name },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["project"] });
+    },
+  });
+}
+
+export function useDeleteProject() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (slug: string) =>
+      api.delete<{ ok: boolean; slug: string }>(
+        `/api/project/${encodeURIComponent(slug)}`,
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["project"] });
+    },
+  });
+}
+
+export function useUploadProjectThumbnail() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { slug: string; file: File }) => {
+      const formData = new FormData();
+      formData.append("file", vars.file);
+      return api.postForm<{ ok: boolean; thumbnail: string }>(
+        `/api/project/${encodeURIComponent(vars.slug)}/thumbnail`,
+        formData,
+      );
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["project"] });
+    },
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Discovery
 // ---------------------------------------------------------------------------
 
 export interface DiscoveredProject {
   name: string;
+  slug: string;
   path: string;
   project_dir: string;
   mtime: number;
+  thumbnail: string;
 }
 
 export interface DiscoveredDataset {
