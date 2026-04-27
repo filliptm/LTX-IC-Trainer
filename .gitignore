@@ -1,0 +1,37 @@
+__pycache__/
+.venv
+venv/
+logs/
+
+# build artifacts
+main.exp
+main.lib
+main.obj
+uv.lock
+
+# editor / IDE
+.vscode/settings.json
+.ruff_cache/
+
+# node / frontend
+node_modules/
+
+# user data (not shipped with the repo)
+datasets/
+projects/
+references/
+
+# runtime-generated dataset/slider TOMLs written by webui.toml_export
+# (location is configurable per project; these are the default fallback names)
+dataset_config.toml
+slider_config.toml
+
+# tests directory is not committed here
+tests/
+
+# agent/assistant private config (per-user, not committed)
+.claude/
+.gemini/
+.mcp.json
+GEMINI.md
+AGENTS.md

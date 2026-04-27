@@ -1,0 +1,545 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Training Page Redesign — Mockups</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --background: 0 0% 4%;
+      --foreground: 0 0% 93%;
+      --card: 0 0% 7%;
+      --muted: 0 0% 12%;
+      --muted-fg: 0 0% 60%;
+      --border: 0 0% 18%;
+      --primary: 0 0% 93%;
+      --accent: 0 0% 10%;
+      --good: 158 30% 55%;
+      --warn: 38 50% 60%;
+      --bad: 0 55% 58%;
+    }
+    body {
+      font-family: Inter, system-ui, sans-serif;
+      background: hsl(var(--background));
+      color: hsl(var(--foreground));
+    }
+    .card { background: hsl(var(--card)); border: 1px solid hsl(var(--border)); border-radius: 8px; }
+    .muted { color: hsl(var(--muted-fg)); }
+    .border-b { border-bottom: 1px solid hsl(var(--border)); }
+    .border-t { border-top: 1px solid hsl(var(--border)); }
+    .border-l { border-left: 1px solid hsl(var(--border)); }
+    .border { border: 1px solid hsl(var(--border)); }
+    .bg-muted { background: hsl(var(--muted)); }
+    .bg-accent { background: hsl(var(--accent)); }
+    .bg-card { background: hsl(var(--card)); }
+    .text-muted { color: hsl(var(--muted-fg)); }
+    .badge { display: inline-flex; align-items: center; padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+    .badge.essential { background: hsl(var(--good) / 0.15); color: hsl(var(--good)); }
+    .badge.advanced { background: hsl(var(--warn) / 0.15); color: hsl(var(--warn)); }
+    .badge.research { background: hsl(0 0% 50% / 0.15); color: hsl(var(--muted-fg)); }
+    .input { background: hsl(var(--background)); border: 1px solid hsl(var(--border)); border-radius: 6px; padding: 6px 10px; color: hsl(var(--foreground)); width: 100%; font-size: 13px; }
+    .label { font-size: 12px; color: hsl(var(--muted-fg)); }
+    .btn { background: hsl(var(--primary)); color: hsl(var(--background)); padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 500; }
+    .btn-outline { background: transparent; color: hsl(var(--foreground)); padding: 6px 12px; border: 1px solid hsl(var(--border)); border-radius: 6px; font-size: 13px; }
+    .btn-ghost { background: transparent; color: hsl(var(--muted-fg)); padding: 6px 12px; border-radius: 6px; font-size: 13px; }
+    .btn-ghost:hover { background: hsl(var(--muted)); color: hsl(var(--foreground)); }
+    .pill { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 999px; background: hsl(var(--muted)); font-size: 11px; }
+    .group-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: hsl(var(--muted-fg)); }
+    .field-row { display: grid; grid-template-columns: 180px 1fr; gap: 12px; align-items: center; padding: 6px 0; }
+    .field-row .input { max-width: 280px; }
+    .switch { width: 32px; height: 18px; background: hsl(var(--border)); border-radius: 999px; position: relative; }
+    .switch.on { background: hsl(var(--primary)); }
+    .switch::after { content: ''; position: absolute; width: 14px; height: 14px; background: hsl(var(--background)); border-radius: 999px; top: 2px; left: 2px; transition: 0.15s; }
+    .switch.on::after { left: 16px; background: hsl(var(--background)); }
+    .scrollbar-thin::-webkit-scrollbar { width: 6px; }
+    .scrollbar-thin::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 3px; }
+    .nav-link { padding: 8px 14px; font-size: 13px; color: hsl(var(--muted-fg)); cursor: pointer; border-bottom: 2px solid transparent; }
+    .nav-link.active { color: hsl(var(--foreground)); border-bottom-color: hsl(var(--primary)); }
+    .nav-link:hover { color: hsl(var(--foreground)); }
+    .preset-card { padding: 14px; border: 1px solid hsl(var(--border)); border-radius: 8px; cursor: pointer; transition: 0.15s; }
+    .preset-card:hover { background: hsl(var(--muted)); }
+    .preset-card.selected { border-color: hsl(var(--primary)); background: hsl(var(--muted)); }
+    .warning-banner { background: hsl(var(--warn) / 0.1); border: 1px solid hsl(var(--warn) / 0.3); color: hsl(var(--warn)); padding: 8px 12px; border-radius: 6px; font-size: 12px; }
+    .info-banner { background: hsl(var(--good) / 0.08); border: 1px solid hsl(var(--good) / 0.25); color: hsl(var(--good)); padding: 8px 12px; border-radius: 6px; font-size: 12px; }
+    h1 { font-size: 24px; font-weight: 700; }
+    h2 { font-size: 18px; font-weight: 600; margin-top: 32px; padding-top: 16px; border-top: 1px dashed hsl(var(--border)); }
+    h3 { font-size: 14px; font-weight: 600; }
+    code { font-family: ui-monospace, monospace; font-size: 12px; background: hsl(var(--muted)); padding: 1px 5px; border-radius: 3px; }
+    .mockup-frame { border: 1px solid hsl(var(--border)); border-radius: 12px; overflow: hidden; margin-top: 16px; }
+    .icon-rail { width: 56px; background: hsl(var(--card)); border-right: 1px solid hsl(var(--border)); }
+    .header-bar { height: 40px; background: hsl(var(--card)); border-bottom: 1px solid hsl(var(--border)); display: flex; align-items: center; padding: 0 16px; }
+    .label-cell { display: flex; align-items: center; gap: 6px; }
+    .help-icon { width: 14px; height: 14px; border-radius: 999px; background: hsl(var(--muted)); color: hsl(var(--muted-fg)); display: inline-flex; align-items: center; justify-content: center; font-size: 9px; cursor: help; }
+  </style>
+</head>
+<body class="p-8">
+
+<div class="max-w-7xl mx-auto">
+  <h1>Training Page Redesign — 3 Approaches</h1>
+  <p class="muted mt-2 text-sm">Three different ways to organize ~95 hyperparameters. Each has tradeoffs noted at the top.</p>
+
+  <!-- ─────────────────────────────────────────────────────────────────────── -->
+  <h2>Approach A — Preset-First with Progressive Disclosure</h2>
+  <p class="text-sm muted mt-2">
+    Lead with a quick-start preset chooser. The form below auto-fills based on selected preset. Hide ~70% of fields by default behind an "Advanced" toggle.
+    Best for: fast iteration, beginner-friendly, "I want to train a LoRA in 30 seconds."
+    Trade-off: power users have to expand sections to see what they want.
+  </p>
+
+  <div class="mockup-frame">
+    <!-- Header -->
+    <div class="header-bar">
+      <span class="text-xs muted">LTX2.3 IC Lora · </span>
+      <span class="text-xs ml-1">Train</span>
+      <span class="ml-auto text-xs muted">2h 14m elapsed</span>
+    </div>
+
+    <div class="flex" style="height: 700px;">
+      <!-- Main content -->
+      <div class="flex-1 overflow-y-auto scrollbar-thin p-6 space-y-6">
+
+        <!-- Preset chooser -->
+        <div>
+          <div class="flex items-center justify-between mb-3">
+            <h3>Quick start</h3>
+            <button class="btn-ghost text-xs">Reset to preset defaults</button>
+          </div>
+          <div class="grid grid-cols-4 gap-3">
+            <div class="preset-card selected">
+              <div class="text-sm font-medium">Video LoRA (t2v)</div>
+              <div class="text-xs muted mt-1">Text → video. Default. dim=32, lr=1e-4</div>
+            </div>
+            <div class="preset-card">
+              <div class="text-sm font-medium">V2V Reference</div>
+              <div class="text-xs muted mt-1">Video → video with reference. dim=32</div>
+            </div>
+            <div class="preset-card">
+              <div class="text-sm font-medium">Audio LoRA</div>
+              <div class="text-xs muted mt-1">Text → audio. dim=16, separate buckets</div>
+            </div>
+            <div class="preset-card">
+              <div class="text-sm font-medium">AV bimodal</div>
+              <div class="text-xs muted mt-1">Audio + video. dim=64, modality balance</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Essential fields card -->
+        <div class="card p-4 space-y-1">
+          <div class="flex items-center justify-between mb-3">
+            <h3>Essentials</h3>
+            <span class="badge essential">Required</span>
+          </div>
+
+          <div class="field-row">
+            <div class="label-cell"><span class="label">LTX-2 checkpoint</span><span class="help-icon">?</span></div>
+            <input class="input" value="C:\AI\models\ltx2-2.3.safetensors" />
+          </div>
+          <div class="field-row">
+            <div class="label-cell"><span class="label">Gemma root</span><span class="help-icon">?</span></div>
+            <input class="input" value="C:\AI\models\gemma-2-2b-it" />
+          </div>
+          <div class="field-row">
+            <div class="label-cell"><span class="label">Output name</span></div>
+            <input class="input" value="beeble_ic_lora" />
+          </div>
+        </div>
+
+        <!-- Hyperparameter card with smart layout -->
+        <div class="card p-4 space-y-1">
+          <div class="flex items-center justify-between mb-3">
+            <h3>Training</h3>
+            <span class="text-xs muted">Estimated 4h 32m on 1× RTX 4090</span>
+          </div>
+
+          <div class="grid grid-cols-2 gap-x-8 gap-y-2">
+            <div class="field-row">
+              <div class="label-cell"><span class="label">Network rank</span></div>
+              <input class="input" value="32" />
+            </div>
+            <div class="field-row">
+              <div class="label-cell"><span class="label">Network alpha</span></div>
+              <input class="input" value="32" />
+            </div>
+            <div class="field-row">
+              <div class="label-cell"><span class="label">Learning rate</span></div>
+              <input class="input" value="0.0001" />
+            </div>
+            <div class="field-row">
+              <div class="label-cell"><span class="label">Max steps</span></div>
+              <input class="input" value="1600" />
+            </div>
+            <div class="field-row">
+              <div class="label-cell"><span class="label">Batch grad accum</span></div>
+              <input class="input" value="1" />
+            </div>
+            <div class="field-row">
+              <div class="label-cell"><span class="label">Save every</span></div>
+              <input class="input" value="200 steps" />
+            </div>
+          </div>
+
+          <div class="warning-banner mt-3">
+            ⚠ Learning rate 1e-3 may cause instability. Try 1e-4 to 5e-5 for first runs.
+          </div>
+        </div>
+
+        <!-- Sampling -->
+        <div class="card p-4 space-y-1">
+          <div class="flex items-center justify-between mb-3">
+            <h3>Sample previews</h3>
+            <div class="switch on" title="enabled"></div>
+          </div>
+          <div class="grid grid-cols-3 gap-x-8 gap-y-2">
+            <div class="field-row" style="grid-template-columns: 100px 1fr;">
+              <div class="label-cell"><span class="label">Every</span></div>
+              <input class="input" value="500 steps" />
+            </div>
+            <div class="field-row" style="grid-template-columns: 80px 1fr;">
+              <div class="label-cell"><span class="label">W × H</span></div>
+              <input class="input" value="768 × 512" />
+            </div>
+            <div class="field-row" style="grid-template-columns: 80px 1fr;">
+              <div class="label-cell"><span class="label">Frames</span></div>
+              <input class="input" value="45" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Advanced toggle -->
+        <div class="space-y-2">
+          <button class="btn-outline w-full text-left flex items-center justify-between">
+            <span>Show advanced settings</span>
+            <span class="text-xs muted">Memory · Quantization · Compile · Research features</span>
+          </button>
+        </div>
+
+        <div class="info-banner">
+          ℹ Pre-caching will run automatically before training (text encoder + latents). Estimated 12 min on this dataset.
+        </div>
+      </div>
+
+      <!-- Right rail: command preview + start button -->
+      <div class="border-l p-4" style="width: 320px; background: hsl(var(--card) / 0.5);">
+        <button class="btn w-full" style="padding: 10px;">▶ Start Training</button>
+        <div class="text-xs muted mt-2 text-center">Will cache → train automatically</div>
+
+        <div class="mt-6">
+          <div class="group-title mb-2">Run summary</div>
+          <div class="text-xs space-y-1">
+            <div class="flex justify-between"><span class="muted">Dataset:</span> <span>Beeble · 99 clips</span></div>
+            <div class="flex justify-between"><span class="muted">Mode:</span> <span>video (v2v)</span></div>
+            <div class="flex justify-between"><span class="muted">Effective batch:</span> <span>1</span></div>
+            <div class="flex justify-between"><span class="muted">Estimated VRAM:</span> <span style="color: hsl(var(--good))">14.2 GB</span></div>
+            <div class="flex justify-between"><span class="muted">Est. time:</span> <span>4h 32m</span></div>
+          </div>
+        </div>
+
+        <div class="mt-6">
+          <div class="group-title mb-2">Command preview</div>
+          <div class="text-[10px] font-mono p-2 rounded bg-muted overflow-x-hidden">
+            python -m ltx_ic_lora_trainer.<br>ltx2_train_network<br>--ltx2_checkpoint ...<br>--network_dim 32<br>--learning_rate 1e-4<br>...
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────────────────────────────────── -->
+  <h2>Approach B — Tabbed Layout with Categorized Fields</h2>
+  <p class="text-sm muted mt-2">
+    Replace the accordion with horizontal tabs. Each tab is a self-contained section with its own search and reset button.
+    Best for: power users who want everything organized cleanly and accessible in 1 click.
+    Trade-off: takes vertical space for the tab bar; less progressive than approach A.
+  </p>
+
+  <div class="mockup-frame">
+    <div class="header-bar">
+      <span class="text-xs muted">LTX2.3 IC Lora · </span>
+      <span class="text-xs ml-1">Train</span>
+      <span class="ml-auto"><button class="btn">▶ Start</button></span>
+    </div>
+
+    <!-- Tab strip -->
+    <div class="flex border-b" style="background: hsl(var(--card) / 0.5);">
+      <div class="nav-link active">Essentials</div>
+      <div class="nav-link">Training Loop</div>
+      <div class="nav-link">Memory & Performance</div>
+      <div class="nav-link">Sampling</div>
+      <div class="nav-link">Research <span class="muted">(7 enabled)</span></div>
+      <div class="nav-link">Output & Logs</div>
+      <div class="ml-auto p-2">
+        <input class="input" placeholder="Search fields..." style="width: 240px;" />
+      </div>
+    </div>
+
+    <div style="height: 600px;" class="overflow-y-auto scrollbar-thin p-6">
+      <!-- Essentials tab content -->
+      <div class="grid grid-cols-2 gap-6">
+        <div>
+          <div class="group-title mb-3">Model paths</div>
+          <div class="space-y-3">
+            <div>
+              <div class="flex justify-between mb-1"><span class="label">LTX-2 checkpoint</span><span class="badge essential">required</span></div>
+              <input class="input" value="C:\AI\models\ltx2-2.3.safetensors" />
+            </div>
+            <div>
+              <div class="flex justify-between mb-1"><span class="label">Gemma root</span><span class="badge essential">required</span></div>
+              <input class="input" value="C:\AI\models\gemma-2-2b-it" />
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="group-title mb-3">Output</div>
+          <div class="space-y-3">
+            <div>
+              <div class="label mb-1">Output directory</div>
+              <input class="input" value="...\projects\LTX2.3_IC_Lora\output" />
+            </div>
+            <div>
+              <div class="label mb-1">Output name</div>
+              <input class="input" value="beeble_ic_lora" />
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="group-title mb-3">LoRA</div>
+          <div class="space-y-3">
+            <div>
+              <div class="flex justify-between mb-1"><span class="label">Target preset</span><span class="muted text-xs">determines IC strategy</span></div>
+              <select class="input">
+                <option>t2v · text → video</option>
+                <option>v2v · video → video reference</option>
+                <option>audio · text → audio</option>
+              </select>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <div class="label mb-1">Network dim</div>
+                <input class="input" value="32" />
+              </div>
+              <div>
+                <div class="label mb-1">Network alpha</div>
+                <input class="input" value="32" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="group-title mb-3">Mode</div>
+          <div class="space-y-3">
+            <div>
+              <div class="label mb-1">LTX-2 mode</div>
+              <div class="flex gap-2">
+                <button class="pill" style="background: hsl(var(--primary)); color: hsl(var(--background));">Video</button>
+                <button class="pill">Audio</button>
+                <button class="pill">AV bimodal</button>
+              </div>
+            </div>
+            <div>
+              <div class="label mb-1">Mixed precision</div>
+              <select class="input"><option>bf16 (recommended)</option><option>fp16</option><option>no</option></select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-8 pt-6 border-t">
+        <div class="group-title mb-3">Optimizer & schedule</div>
+        <div class="grid grid-cols-3 gap-4">
+          <div><div class="label mb-1">Optimizer</div><select class="input"><option>adamw8bit</option></select></div>
+          <div><div class="label mb-1">Learning rate</div><input class="input" value="1e-4" /></div>
+          <div><div class="label mb-1">Max steps</div><input class="input" value="1600" /></div>
+          <div><div class="label mb-1">Warmup steps</div><input class="input" value="100" /></div>
+          <div><div class="label mb-1">Grad accumulation</div><input class="input" value="1" /></div>
+          <div><div class="label mb-1">Save every</div><input class="input" value="200" /></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────────────────────────────────── -->
+  <h2>Approach C — Hybrid: Sticky Sidebar Navigation + Single Long Form</h2>
+  <p class="text-sm muted mt-2">
+    Single long scrollable form with a sticky left nav showing all sections. Click jumps to anchor. Fields stay grouped visually with visual badges (Essential / Advanced / Research).
+    Best for: discoverability + power. Like Stripe's settings or Linear's preferences.
+    Trade-off: more vertical scroll, but everything is "right there" without clicks.
+  </p>
+
+  <div class="mockup-frame">
+    <div class="header-bar">
+      <span class="text-xs muted">LTX2.3 IC Lora · </span>
+      <span class="text-xs ml-1">Train</span>
+      <span class="ml-auto flex items-center gap-3">
+        <span class="text-xs muted">11 unsaved changes</span>
+        <button class="btn">▶ Start Training</button>
+      </span>
+    </div>
+
+    <div class="flex" style="height: 700px;">
+      <!-- Sticky sub-nav -->
+      <div class="border-r p-4 overflow-y-auto" style="width: 220px; background: hsl(var(--card) / 0.5);">
+        <div class="group-title mb-3">Jump to</div>
+        <div class="space-y-1 text-sm">
+          <div class="px-2 py-1 rounded bg-muted">Model & paths</div>
+          <div class="px-2 py-1 rounded muted hover:bg-muted">LoRA network</div>
+          <div class="px-2 py-1 rounded muted hover:bg-muted">Optimizer</div>
+          <div class="px-2 py-1 rounded muted hover:bg-muted">Schedule</div>
+          <div class="px-2 py-1 rounded muted hover:bg-muted">Sampling</div>
+          <div class="px-2 py-1 rounded muted hover:bg-muted">Validation</div>
+          <div class="pt-3 mt-3 border-t">
+            <div class="group-title mb-2">Advanced</div>
+            <div class="px-2 py-1 rounded muted hover:bg-muted">Memory & VRAM</div>
+            <div class="px-2 py-1 rounded muted hover:bg-muted">Quantization</div>
+            <div class="px-2 py-1 rounded muted hover:bg-muted">Attention</div>
+            <div class="px-2 py-1 rounded muted hover:bg-muted">torch.compile</div>
+          </div>
+          <div class="pt-3 mt-3 border-t">
+            <div class="group-title mb-2">Research</div>
+            <div class="px-2 py-1 rounded muted hover:bg-muted flex justify-between">CREPA <span class="text-[10px]">off</span></div>
+            <div class="px-2 py-1 rounded muted hover:bg-muted flex justify-between">Self-Flow <span class="text-[10px]">off</span></div>
+            <div class="px-2 py-1 rounded muted hover:bg-muted flex justify-between">HFATO <span class="text-[10px]">off</span></div>
+            <div class="px-2 py-1 rounded muted hover:bg-muted flex justify-between">Preservation <span class="text-[10px]">off</span></div>
+            <div class="px-2 py-1 rounded muted hover:bg-muted flex justify-between">TARP / DCR <span class="text-[10px]">off</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Long form -->
+      <div class="flex-1 overflow-y-auto scrollbar-thin p-6 space-y-8">
+        <section>
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg">Model & paths</h3>
+            <button class="btn-ghost text-xs">Reset section</button>
+          </div>
+          <div class="space-y-3">
+            <div class="field-row">
+              <span class="label">LTX-2 checkpoint <span class="badge essential ml-1">essential</span></span>
+              <input class="input" value="C:\AI\models\ltx2-2.3.safetensors" />
+            </div>
+            <div class="field-row">
+              <span class="label">Gemma root <span class="badge essential ml-1">essential</span></span>
+              <input class="input" value="C:\AI\models\gemma-2-2b-it" />
+            </div>
+            <div class="field-row">
+              <span class="label">LTX-2 mode</span>
+              <select class="input"><option>video</option></select>
+            </div>
+            <div class="field-row">
+              <span class="label">Output dir</span>
+              <input class="input" value="...\output" />
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg">LoRA network</h3>
+            <button class="btn-ghost text-xs">Reset section</button>
+          </div>
+          <div class="space-y-3">
+            <div class="field-row">
+              <span class="label">Network rank (dim) <span class="badge essential ml-1">essential</span></span>
+              <div class="flex items-center gap-3 max-w-md">
+                <input class="input flex-1" value="32" style="max-width: 100px;" />
+                <span class="text-xs muted">8 (tiny) · 16 (default) · 32 (medium) · 64 (large)</span>
+              </div>
+            </div>
+            <div class="field-row">
+              <span class="label">Network alpha</span>
+              <input class="input" value="32" />
+            </div>
+            <div class="field-row">
+              <span class="label">Target preset</span>
+              <select class="input"><option>t2v</option></select>
+            </div>
+            <div class="field-row">
+              <span class="label">Network dropout <span class="badge advanced ml-1">advanced</span></span>
+              <input class="input" placeholder="(none)" />
+            </div>
+            <div class="field-row">
+              <span class="label">Train connectors <span class="badge research ml-1">research</span></span>
+              <div class="switch"></div>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg">Optimizer</h3>
+          </div>
+          <div class="space-y-3">
+            <div class="field-row"><span class="label">Optimizer type</span><select class="input"><option>adamw8bit</option></select></div>
+            <div class="field-row"><span class="label">Learning rate</span><input class="input" value="1e-4" /></div>
+            <div class="field-row"><span class="label">LR scheduler</span><select class="input"><option>constant_with_warmup</option></select></div>
+            <div class="field-row"><span class="label">Warmup steps</span><input class="input" value="100" /></div>
+            <div class="field-row"><span class="label">Grad accumulation</span><input class="input" value="1" /></div>
+          </div>
+        </section>
+
+        <div class="info-banner">… continues with Schedule, Sampling, Validation, then Advanced sections, then Research with each disabled-by-default section collapsed</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────────────────────────────────── -->
+  <h2>Comparison Summary</h2>
+
+  <div class="grid grid-cols-3 gap-4 mt-4">
+    <div class="card p-4">
+      <h3>A · Preset-First</h3>
+      <div class="text-xs muted mt-1 mb-3">Best for: speed</div>
+      <div class="text-xs space-y-2">
+        <div><strong>+</strong> Fastest path to "click train"</div>
+        <div><strong>+</strong> Beginner-friendly</div>
+        <div><strong>+</strong> Right rail keeps command + start visible</div>
+        <div><strong>−</strong> Power users need extra clicks</div>
+        <div><strong>−</strong> Presets must be maintained</div>
+      </div>
+    </div>
+    <div class="card p-4">
+      <h3>B · Tabbed</h3>
+      <div class="text-xs muted mt-1 mb-3">Best for: organization</div>
+      <div class="text-xs space-y-2">
+        <div><strong>+</strong> Clean separation of concerns</div>
+        <div><strong>+</strong> Search bar for any field</div>
+        <div><strong>+</strong> Power users can pin a specific tab</div>
+        <div><strong>−</strong> 6 tabs feels heavy at the top</div>
+        <div><strong>−</strong> Loses sense of "scrolling through a config"</div>
+      </div>
+    </div>
+    <div class="card p-4">
+      <h3>C · Sticky Nav + Long Form</h3>
+      <div class="text-xs muted mt-1 mb-3">Best for: power users</div>
+      <div class="text-xs space-y-2">
+        <div><strong>+</strong> Everything visible on one scroll</div>
+        <div><strong>+</strong> Per-field badges (essential/advanced/research)</div>
+        <div><strong>+</strong> Linear / Stripe pattern — feels "real product"</div>
+        <div><strong>−</strong> Lots of vertical scroll on small screens</div>
+        <div><strong>−</strong> No quick start for beginners</div>
+      </div>
+    </div>
+  </div>
+
+  <h2>My Recommendation</h2>
+  <p class="text-sm mt-2">
+    Hybrid of A and C. Take the <strong>preset chooser + right-rail summary/start</strong> from A, and the <strong>per-field badge system + sticky sub-nav</strong> from C.
+    Skip B's tabs — they hide too much and force you to context-switch when reasoning about related settings (e.g. learning rate sits next to LR scheduler conceptually but they'd be in different tabs).
+  </p>
+
+  <ol class="text-sm mt-3 list-decimal pl-6 space-y-2">
+    <li><strong>Top of page:</strong> 4 preset cards (video, v2v, audio, av) + estimated time/VRAM card on the right.</li>
+    <li><strong>Left of form:</strong> Sticky sub-nav with sections grouped under <em>Essentials</em>, <em>Advanced</em>, <em>Research</em>.</li>
+    <li><strong>Form body:</strong> Long scrollable form with section anchors. Each field carries an inline badge (essential / advanced / research). Disabled features collapse their fields.</li>
+    <li><strong>Right of page:</strong> Persistent right rail with the Start button, command preview, and run summary (dataset + estimated time/VRAM).</li>
+    <li><strong>Inline warnings:</strong> If a field has a dangerous value, a small inline warning appears next to it (e.g., LR > 1e-3, max_steps < 100).</li>
+    <li><strong>Search:</strong> Keyboard shortcut <code>/</code> or <code>Cmd+K</code> opens a fuzzy field search. Quickly jump to any of the 95 fields.</li>
+  </ol>
+
+</div>
+
+</body>
+</html>
