@@ -8,7 +8,7 @@ import { useProject, useCloseProject } from "@/api/projects";
 import { SystemStrip } from "./SystemStrip";
 
 const PAGE_LABELS: Record<string, string> = {
-  "/": "Data",
+  "/": "Projects",
   "/training": "Train",
 };
 
@@ -21,7 +21,7 @@ export function Header() {
 
   const projectName =
     (project?.config?.name as string | undefined) ?? "No project";
-  const pageName = PAGE_LABELS[pathname] ?? "Data";
+  const pageName = PAGE_LABELS[pathname] ?? "Projects";
   const isLoaded = project?.loaded ?? false;
 
   // Clicking the project name in the breadcrumb closes the loaded project
@@ -49,13 +49,13 @@ export function Header() {
               onClick={handleProjectClick}
               disabled={closeProject.isPending}
               className="truncate max-w-[200px] rounded px-1.5 py-0.5 text-muted-foreground hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-              aria-label={isLoaded ? "Close project and return to picker" : "Go to Data"}
+              aria-label={isLoaded ? "Close project and return to Projects" : "Go to Projects"}
             >
               <span className="truncate">{projectName}</span>
             </button>
           </TooltipTrigger>
           <TooltipContent>
-            {isLoaded ? "Close project & back to picker" : "Back to Data"}
+            {isLoaded ? "Close project & back to Projects" : "Back to Projects"}
           </TooltipContent>
         </Tooltip>
         <ChevronRight className="size-3 text-muted-foreground shrink-0" />

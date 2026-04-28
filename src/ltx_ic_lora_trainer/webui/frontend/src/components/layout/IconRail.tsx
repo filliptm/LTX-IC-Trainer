@@ -4,7 +4,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip
 import { cn } from "@/lib/utils";
 
 const NAV = [
-  { to: "/", label: "Data", icon: Database },
+  { to: "/", label: "Projects", icon: Database },
   { to: "/training", label: "Train", icon: GraduationCap },
 ] as const;
 

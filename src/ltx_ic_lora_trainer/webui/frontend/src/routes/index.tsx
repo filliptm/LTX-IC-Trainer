@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { AlertTriangle, Database, FolderPlus, ImagePlus, MoreVertical, Pencil, Trash2 } from "lucide-react";
-import { motion } from "motion/react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -32,8 +31,6 @@ import {
   type DiscoveredProject,
 } from "@/api/projects";
 import { useProjectStore } from "@/stores/projectStore";
-import { useUIStore } from "@/stores/uiStore";
-import { DatasetSidebar } from "@/features/data/DatasetSidebar";
 import { DatasetWorkspaceWithCount } from "@/features/data/DatasetWorkspace";
 import { useSetContextPanel } from "@/components/layout/ContextPanelContext";
 
@@ -47,66 +44,14 @@ export const Route = createFileRoute("/")({
 
 function DataPage() {
   const { data: project } = useProject();
-  const selectedIndex = useUIStore((s) => s.selectedDatasetIndex);
-  const setSelectedIndex = useUIStore((s) => s.setSelectedDatasetIndex);
 
-  useSetContextPanel(<DatasetSidebar />);
-
-  const datasets = (
-    (project?.config?.dataset as Record<string, unknown> | undefined)?.datasets as
-      | unknown[]
-      | undefined
-  ) ?? [];
-
-  // A project always ships with one dataset. Auto-select it so the user
-  // lands directly on the workspace instead of an empty "pick a dataset"
-  // state. Only kicks in when nothing is selected — the user can still
-  // pick another in the multi-dataset case.
-  useEffect(() => {
-    if (project?.loaded && selectedIndex === null && datasets.length > 0) {
-      setSelectedIndex(0);
-    }
-  }, [project?.loaded, selectedIndex, datasets.length, setSelectedIndex]);
+  useSetContextPanel(null);
 
   if (!project?.loaded) {
     return <NoProjectView />;
   }
 
-  if (datasets.length === 0 || selectedIndex === null) {
-    return (
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.25 }}
-        className="flex h-full items-center justify-center"
-      >
-        <div className="text-center max-w-sm">
-          <div className="relative mx-auto mb-6 flex size-20 items-center justify-center">
-            {/* Soft radial glow behind the icon */}
-            <div className="absolute inset-0 rounded-full bg-gradient-to-br from-muted-foreground/10 via-muted-foreground/5 to-transparent blur-xl" />
-            {/* Inner circle */}
-            <div className="absolute inset-2 rounded-full border border-border/60 bg-muted/40" />
-            <Database className="relative size-8 text-muted-foreground/70" />
-          </div>
-          <h2 className="text-lg font-semibold tracking-tight">
-            {datasets.length === 0
-              ? "Empty project"
-              : "Select a dataset"}
-          </h2>
-          <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
-            {datasets.length === 0
-              ? "This project has no dataset. Use the sidebar to add one."
-              : "Choose a dataset from the sidebar to view and manage its contents."}
-          </p>
-        </div>
-      </motion.div>
-    );
-  }
-
-  // Clamp index in case datasets were deleted
-  const clampedIndex = Math.min(selectedIndex, datasets.length - 1);
-
-  return <DatasetWorkspaceWithCount datasetIndex={clampedIndex} />;
+  return <DatasetWorkspaceWithCount datasetIndex={0} />;
 }
 
 // ---------------------------------------------------------------------------
@@ -153,7 +98,7 @@ function NoProjectView() {
     <div className="space-y-6 p-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-balance">Data</h1>
+          <h1 className="text-2xl font-bold text-balance">Projects</h1>
           <p className="text-sm text-muted-foreground text-pretty">
             {projects.length > 0
               ? "Select a project to get started, or create a new one."
@@ -169,7 +114,7 @@ function NoProjectView() {
       </div>
 
       {projects.length > 0 && (
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="grid gap-2 grid-cols-2 md:grid-cols-4">
           {projects.map((p) => (
             <DiscoveredProjectCard
               key={p.path}
@@ -316,9 +261,9 @@ function DiscoveredProjectCard({
               </div>
             )}
           </div>
-          <div className="p-3">
-            <div className="truncate text-sm font-medium">{project.name}</div>
-            <div className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
+          <div className="p-2">
+            <div className="truncate text-xs font-medium">{project.name}</div>
+            <div className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground">
               {project.slug}
             </div>
           </div>
