@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect } from "react";
 import { FormProvider, useForm } from "react-hook-form";
 import { Save } from "lucide-react";
 import { toast } from "sonner";
@@ -11,8 +11,6 @@ import {
   NumberField,
   SelectField,
 } from "@/features/project/FormFields";
-import { BucketPreview } from "./BucketPreview";
-import { DurationPreview } from "./DurationPreview";
 
 interface DatasetSettingsProps {
   datasetIndex: number;
@@ -63,39 +61,6 @@ export function DatasetSettings({ datasetIndex }: DatasetSettingsProps) {
   const isDirty = methods.formState.isDirty;
   const watchType = methods.watch("type");
   const isVideo = watchType === "video";
-  // Live-watch the resolution so the BucketPreview re-runs as the user types
-  // the target dimensions (debounced inside the component itself).
-  const watchedW = methods.watch("resolution_w");
-  const watchedH = methods.watch("resolution_h");
-  // Trainer-effective video options drive the sample-count estimate inside
-  // <DurationPreview>. We watch them all here at the parent so both
-  // <BucketPreview> and <DurationPreview> see the same `trainer` reference
-  // and share a single /buckets request via TanStack Query's structural
-  // cache key.
-  const watchedTargetFrames = methods.watch("target_frames");
-  const watchedFrameExtraction = methods.watch("frame_extraction");
-  const watchedFrameStride = methods.watch("frame_stride");
-  const watchedFrameSample = methods.watch("frame_sample");
-  const watchedTargetFps = methods.watch("target_fps");
-  const watchedMaxFrames = methods.watch("max_frames");
-  const trainerParams = useMemo(
-    () => ({
-      target_frames: Number(watchedTargetFrames) || null,
-      frame_extraction: watchedFrameExtraction || null,
-      frame_stride: watchedFrameStride ?? null,
-      frame_sample: watchedFrameSample ?? null,
-      target_fps: watchedTargetFps ?? null,
-      max_frames: watchedMaxFrames ?? null,
-    }),
-    [
-      watchedTargetFrames,
-      watchedFrameExtraction,
-      watchedFrameStride,
-      watchedFrameSample,
-      watchedTargetFps,
-      watchedMaxFrames,
-    ],
-  );
 
   const handleSave = methods.handleSubmit(async (data) => {
     if (!project?.config) return;
@@ -188,22 +153,6 @@ export function DatasetSettings({ datasetIndex }: DatasetSettingsProps) {
                 </>
               }
             />
-            <div className="rounded-md border border-border/60 bg-muted/20 p-3">
-              <BucketPreview
-                datasetIndex={datasetIndex}
-                width={Number(watchedW)}
-                height={Number(watchedH)}
-                trainer={trainerParams}
-              />
-            </div>
-            <div className="rounded-md border border-border/60 bg-muted/20 p-3">
-              <DurationPreview
-                datasetIndex={datasetIndex}
-                width={Number(watchedW)}
-                height={Number(watchedH)}
-                trainer={trainerParams}
-              />
-            </div>
             <NumberField
               name="batch_size"
               label="Batch size"

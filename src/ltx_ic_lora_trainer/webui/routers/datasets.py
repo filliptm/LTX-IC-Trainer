@@ -226,8 +226,11 @@ def _estimate_training_samples(
     frame_sample: Optional[int],
     target_fps: Optional[float],
     max_frames: Optional[int],
-) -> int:
-    """Estimate how many training samples the loader will produce.
+) -> tuple[int, int]:
+    """Estimate how many training samples the loader will produce, and how
+    many videos will be silently dropped because they're too short.
+
+    Returns (estimated_samples, videos_dropped).
 
     Mirrors the per-video chunking logic the trainer does at sampling time.
     Inputs are tuples of (duration_s, source_frame_count, source_fps); only
@@ -238,18 +241,19 @@ def _estimate_training_samples(
         chunk   → effective_frames // target_frames (non-overlapping)
         slide   → 1 + (effective_frames - target_frames) // stride  (frames-fit)
         uniform → 1 sample if effective_frames >= target_frames, else 0
-        full    → 1 sample if effective_frames == target_frames, else 0
+        full    → always 1 sample (uses actual frame count, never dropped)
 
     `frame_sample`, when set, caps the per-video output to that many.
     `max_frames`, when set, truncates the source frame count first.
 
     This is an estimate — the real loader may differ in edge cases — but
-    it's accurate enough for the "you'll produce ~N training samples"
-    line. Returns 0 if target_frames is invalid.
+    it's accurate enough for the "you'll produce ~N training samples" line.
+    Returns (0, 0) if target_frames is invalid.
     """
     if target_frames <= 0:
-        return 0
+        return 0, 0
     total = 0
+    dropped = 0
     stride = frame_stride if frame_stride and frame_stride > 0 else target_frames
     cap = frame_sample if frame_sample and frame_sample > 0 else None
     for duration_s, src_frames, src_fps in durations_with_frames:
@@ -264,6 +268,9 @@ def _estimate_training_samples(
         if max_frames and max_frames > 0:
             effective = min(effective, max_frames)
         if effective < target_frames:
+            # full mode uses whatever frames exist — it never drops a video
+            if frame_extraction != "full":
+                dropped += 1
             continue
 
         if frame_extraction == "head" or frame_extraction == "uniform":
@@ -273,13 +280,13 @@ def _estimate_training_samples(
         elif frame_extraction == "slide":
             n = 1 + (effective - target_frames) // stride
         elif frame_extraction == "full":
-            n = 1 if effective == target_frames else 0
+            n = 1
         else:
             n = 1
         if cap is not None:
             n = min(n, cap)
         total += n
-    return total
+    return total, dropped
 
 
 # ---------------------------------------------------------------------------
@@ -772,6 +779,7 @@ async def get_dataset_buckets(
         "video_count": 0,
         "image_count": 0,
         "estimated_training_samples": 0,
+        "videos_dropped": 0,
     }
     if not buckets:
         return empty_response
@@ -848,7 +856,7 @@ async def get_dataset_buckets(
     # training sample (it's already a fixed-size frame; the trainer treats
     # it as target_frames=1 conceptually). Duration distribution doesn't
     # include images.
-    estimated_video_samples = _estimate_training_samples(
+    estimated_video_samples, videos_dropped = _estimate_training_samples(
         durations_with_frames,
         eff_target_frames,
         eff_frame_extraction,
@@ -870,6 +878,7 @@ async def get_dataset_buckets(
         "video_count": video_count,
         "image_count": image_count,
         "estimated_training_samples": estimated_total,
+        "videos_dropped": videos_dropped,
     }
 
 

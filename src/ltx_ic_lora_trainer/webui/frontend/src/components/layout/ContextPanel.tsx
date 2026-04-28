@@ -13,7 +13,7 @@ export function ContextPanel() {
   if (!content) return null;
 
   return (
-    <aside className="flex w-56 shrink-0 flex-col overflow-hidden border-r border-border bg-card/60">
+    <aside className="flex w-72 shrink-0 flex-col overflow-hidden border-r border-border bg-card/60">
       <AnimatePresence mode="wait">
         <motion.div
           key="content"

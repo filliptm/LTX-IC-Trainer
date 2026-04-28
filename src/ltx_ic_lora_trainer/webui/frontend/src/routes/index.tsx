@@ -32,6 +32,7 @@ import {
 } from "@/api/projects";
 import { useProjectStore } from "@/stores/projectStore";
 import { DatasetWorkspaceWithCount } from "@/features/data/DatasetWorkspace";
+import { DatasetStatsSidebar } from "@/features/data/DatasetStatsSidebar";
 import { useSetContextPanel } from "@/components/layout/ContextPanelContext";
 
 export const Route = createFileRoute("/")({
@@ -45,7 +46,7 @@ export const Route = createFileRoute("/")({
 function DataPage() {
   const { data: project } = useProject();
 
-  useSetContextPanel(null);
+  useSetContextPanel(project?.loaded ? <DatasetStatsSidebar /> : null);
 
   if (!project?.loaded) {
     return <NoProjectView />;

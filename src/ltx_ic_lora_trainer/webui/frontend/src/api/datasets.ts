@@ -207,6 +207,12 @@ export interface DatasetBucketsResponse {
    * each image as one sample plus the per-video chunking estimate.
    */
   estimated_training_samples: number;
+  /**
+   * Number of videos that will be silently dropped because they are shorter
+   * than target_frames after FPS resampling and max_frames truncation.
+   * Zero for `full` extraction mode (which uses whatever frames exist).
+   */
+  videos_dropped: number;
 }
 
 /** Per-call trainer-effective parameters for the sample-count estimator. */
