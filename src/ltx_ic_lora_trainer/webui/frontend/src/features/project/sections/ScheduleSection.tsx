@@ -40,6 +40,19 @@ export function ScheduleSection() {
         min={1}
         badge="essential"
         hint="A few hundred to a few thousand. More steps = more training time."
+        tooltip={
+          <>
+            Total optimiser steps before training stops. One "step" =
+            one update to the LoRA weights (after gradient accumulation, if
+            any).
+            <br /><br />
+            Rough scale: <strong>200–500</strong> for a quick experiment,{" "}
+            <strong>1k–6k</strong> for most LoRAs, <strong>10k+</strong>{" "}
+            when you're trying to drive deep behaviour change in the base
+            model. Save checkpoints often so you can pick the best one
+            after the fact.
+          </>
+        }
       />
       <NumberField
         name="training.max_train_epochs"
@@ -56,6 +69,17 @@ export function ScheduleSection() {
         nullable
         integer
         min={1}
+        tooltip={
+          <>
+            Checkpoint cadence in optimiser steps. Each save writes a full
+            LoRA <em>.safetensors</em> plus a <em>.comfy.safetensors</em>{" "}
+            companion. State directories (resumable) are also written so you
+            can pause/resume.
+            <br /><br />
+            Common picks: <strong>250–500</strong>. Leave empty to only save
+            on training end / pause.
+          </>
+        }
       />
       <NumberField
         name="training.save_every_n_epochs"
@@ -63,6 +87,14 @@ export function ScheduleSection() {
         nullable
         integer
         min={1}
+        tooltip={
+          <>
+            Same as <em>Save every N steps</em>, but on epoch boundaries
+            (full passes through the dataset). Use this <em>or</em> the
+            steps version. Setting both is fine — whichever fires first
+            wins.
+          </>
+        }
       />
       <SelectField
         name="training.timestep_sampling"
@@ -95,6 +127,17 @@ export function ScheduleSection() {
         integer
         min={0}
         hint="Leave empty for random. Set a fixed value for reproducibility."
+        tooltip={
+          <>
+            Random seed for timestep sampling, dropout, and dataloader
+            shuffling. Setting a fixed seed makes two runs with identical
+            configs produce identical training (modulo CUDA non-determinism
+            in some kernels).
+            <br /><br />
+            Leave empty for a fresh random seed per run — usually what you
+            want unless you're chasing a specific result.
+          </>
+        }
       />
     </Section>
   );

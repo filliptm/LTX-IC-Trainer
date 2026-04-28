@@ -10,6 +10,16 @@ export function BasicSection() {
         placeholder="/path/to/ltx2.safetensors"
         hint="Base DiT weights. Required."
         badge="essential"
+        tooltip={
+          <>
+            Path to the LTX-2 base DiT weights (<em>.safetensors</em>). This
+            is the model your LoRA adapts. The Gemma text encoder and VAE are
+            loaded separately.
+            <br /><br />
+            The trainer auto-detects 2.0 vs 2.3 from the file's header — set
+            <em> LTX version</em> only if you want to force a specific one.
+          </>
+        }
       />
       <TextField
         name="training.gemma_root"
@@ -17,6 +27,17 @@ export function BasicSection() {
         placeholder="/path/to/gemma"
         hint="Gemma-2 text encoder weights directory. Required unless using --gemma_safetensors."
         badge="essential"
+        tooltip={
+          <>
+            Directory holding the Gemma-2 text encoder in standard
+            HuggingFace layout (<em>config.json</em> +{" "}
+            <em>model.safetensors</em> shards).
+            <br /><br />
+            Required unless you point at a single-file Gemma checkpoint via
+            <em> Gemma safetensors</em> (the alternative used for
+            ComfyUI-style fp8 variants).
+          </>
+        }
       />
       <TextField
         name="training.gemma_safetensors"
@@ -31,6 +52,19 @@ export function BasicSection() {
         options={["video", "audio", "av"]}
         hint="video: text→video · audio: text→audio · av: bimodal audio+video with cross-modal attention"
         badge="essential"
+        tooltip={
+          <>
+            Which of LTX-2's three branches you're training:
+            <br /><br />
+            <strong>video</strong> · text → video. The default.
+            <br />
+            <strong>audio</strong> · text → audio only.
+            <br />
+            <strong>av</strong> · bimodal audio + video, trained jointly with
+            cross-modal attention. Costs more VRAM and time but the only mode
+            where the audio LoRA can actually condition on the video.
+          </>
+        }
       />
       <SelectField
         name="training.ltx_version"
@@ -52,6 +86,16 @@ export function BasicSection() {
         placeholder="/path/to/output"
         hint="Where checkpoints, state, logs, and samples are written."
         badge="essential"
+        tooltip={
+          <>
+            Where checkpoints (<em>.safetensors</em>), accelerator state
+            directories, training logs, and validation samples land. Created
+            automatically if it doesn't exist.
+            <br /><br />
+            Each save also writes a <em>.comfy.safetensors</em> companion
+            file in ComfyUI-compatible format.
+          </>
+        }
       />
       <TextField
         name="training.output_name"
