@@ -26,7 +26,7 @@ src/ltx_ic_lora_trainer/webui/
         ├── components/ui/   # 15 shadcn-style primitives
         ├── components/common/   # ProcessControls, ProcessConsole, CommandPreview
         ├── components/layout/   # IconRail, ContextPanel, ContextPanelContext, Header, Layout, SystemStrip
-        ├── features/project/    # HyperparameterPage + HyperparameterSidebar + TrainingActionRail + 8 section components
+        ├── features/project/    # HyperparameterPage + EssentialsGrid + HyperparameterSidebar + TrainingActionRail + 8 section components
         ├── features/dataset/    # DatasetEntryCard (legacy)
         ├── features/data/       # DatasetSidebar, DatasetWorkspace, DatasetToolbar, MediaGrid, MediaTile, DatasetSettings, DatasetList
         ├── features/captions/   # MediaPreview, AssetBrowser, CaptionEditor
@@ -385,7 +385,8 @@ Hand-written shadcn-style primitives. No `shadcn/ui` CLI — these are just 15 s
 
 | Component | Purpose |
 |---|---|
-| `HyperparameterPage` | Main training-config form. Wraps 8 section components in a shadcn Accordion (`type="multiple"`). One RHF form with the full project config as default values. AccordionContent unmounts when closed so RHF only tracks the currently-visible subset of the ~200-field TrainingConfig. Save button calls `useUpdateProject().mutateAsync`. |
+| `HyperparameterPage` | Main training-config form. Two layouts gated by `uiStore.showAdvancedTraining`. **Off (default):** renders `EssentialsGrid` — all four Essentials sections (Model & paths, LoRA, Optimizer, Schedule) as cards in a responsive 2-column grid (collapses to 1 column below `xl`), with a "Show advanced" Switch in the page header. ~18 visible fields total, no sidebar. **On:** classic sticky left sidebar (Essentials / Advanced / Research tab nav) + fade-swapping main content. Both modes share the sticky right `TrainingActionRail`. One RHF form holds the full config either way; fields hidden by `badge` or by view mode keep their stored values intact. Save button calls `useUpdateProject().mutateAsync`. |
+| `EssentialsGrid` | Single-page 2-column grid view of the four Essentials sections (Model & paths, LoRA, Optimizer, Schedule). Used by `HyperparameterPage` when `showAdvancedTraining` is off. Each section is a `Card` with its own header + form rows; together they expose the ~18 fields a typical LoRA run touches. The "Show advanced" Switch lives in the grid's own header. |
 | `HyperparameterSidebar` | Context-panel rendering of the section list. Quick-jump nav into the open accordion item; mirrors the section order on the main page. |
 | `TrainingActionRail` | Sticky action rail surfacing Start / Stop / Pause / Resume controls plus pipeline (cache-then-train) status, alongside the form. |
 | `Section` / `SubGroup` | Layout wrappers for the inside of each accordion section. |
@@ -452,6 +453,8 @@ Both use the `persist` middleware to localStorage.
 - `setTheme(t)`, `toggleTheme()`
 - `selectedDatasetIndex: number | null` — which dataset entry is active on the Data page
 - `setSelectedDatasetIndex(i)`
+- `showAdvancedTraining: boolean` (default `false`) — hides the "Advanced" and "Research" sidebar groups on the Train page, plus any individual field tagged `badge="advanced"` or `badge="research"`. Toggled via the Switch at the bottom of the sidebar.
+- `setShowAdvancedTraining(v)`
 
 **`projectStore.ts`**:
 - `recentProjects: {path, name, lastOpened}[]` (max 20)

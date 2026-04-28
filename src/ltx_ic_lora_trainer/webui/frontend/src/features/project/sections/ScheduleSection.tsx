@@ -48,6 +48,7 @@ export function ScheduleSection() {
         integer
         min={1}
         hint="Takes precedence over max_train_steps when set."
+        badge="advanced"
       />
       <NumberField
         name="training.save_every_n_steps"

@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { toast } from "sonner";
 
 import { useProject, useUpdateProject } from "@/api/projects";
+import { useUIStore } from "@/stores/uiStore";
 
 import { BasicSection } from "./sections/BasicSection";
 import { LoRASection } from "./sections/LoRASection";
@@ -33,6 +34,7 @@ import {
 
 import { HyperparameterSidebar, type SectionNavGroup, type SectionNavItem } from "./HyperparameterSidebar";
 import { TrainingActionRail } from "./TrainingActionRail";
+import { EssentialsGrid } from "./EssentialsGrid";
 
 type GroupTitle = "Essentials" | "Advanced" | "Research";
 
@@ -419,6 +421,45 @@ function HyperparameterShell({
   isDirty: boolean;
   isSaving: boolean;
 }) {
+  const showAdvanced = useUIStore((s) => s.showAdvancedTraining);
+
+  // Render two completely separate sub-components based on mode. Each one
+  // has its own (stable) set of hooks — flipping `showAdvanced` unmounts
+  // one and mounts the other, which is fine. An earlier version did a
+  // conditional `return` inside this same component before later hook
+  // calls, which violated the Rules of Hooks (React error #310).
+  if (showAdvanced) {
+    return <AdvancedShell isDirty={isDirty} isSaving={isSaving} />;
+  }
+  return <EssentialsShell isDirty={isDirty} isSaving={isSaving} />;
+}
+
+function EssentialsShell({
+  isDirty,
+  isSaving,
+}: {
+  isDirty: boolean;
+  isSaving: boolean;
+}) {
+  return (
+    <>
+      <div className="flex-1 overflow-y-auto scrollbar-thin">
+        <EssentialsGrid />
+      </div>
+      <TrainingActionRail isDirty={isDirty} isSaving={isSaving} />
+    </>
+  );
+}
+
+function AdvancedShell({
+  isDirty,
+  isSaving,
+}: {
+  isDirty: boolean;
+  isSaving: boolean;
+}) {
+  const visibleSections = SECTIONS;
+
   const [activeId, setActiveId] = useState<string>(() => {
     if (typeof window === "undefined") return SECTIONS[0]!.id;
     const saved = window.localStorage.getItem(ACTIVE_TAB_STORAGE_KEY);
@@ -444,25 +485,25 @@ function HyperparameterShell({
     return m;
   }, [toggleFieldNames, toggleValues]);
 
-  // Build sidebar groups from the flat SECTIONS list
+  // Build sidebar groups from the visible-sections list.
   const navGroups: SectionNavGroup[] = useMemo(() => {
     return GROUP_ORDER.map<SectionNavGroup>((title) => ({
       title,
-      items: SECTIONS.filter((s) => s.groupTitle === title).map<SectionNavItem>((s) => ({
+      items: visibleSections.filter((s) => s.groupTitle === title).map<SectionNavItem>((s) => ({
         id: s.id,
         label: s.label,
         parentLabel: s.parentLabel,
         isOn: s.toggleField ? toggleMap.get(s.toggleField) ?? false : undefined,
       })),
-    }));
-  }, [toggleMap]);
+    })).filter((g) => g.items.length > 0);
+  }, [toggleMap, visibleSections]);
 
-  // Fuzzy search across all field labels in all sections
+  // Fuzzy search across all field labels.
   const searchResults = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return [];
     const matches: { id: string; label: string; sectionId: string; sectionLabel: string }[] = [];
-    for (const section of SECTIONS) {
+    for (const section of visibleSections) {
       for (const field of section.fields) {
         if (field.label.toLowerCase().includes(q) || field.id.toLowerCase().includes(q)) {
           matches.push({
@@ -475,7 +516,7 @@ function HyperparameterShell({
       }
     }
     return matches.slice(0, 50);
-  }, [searchQuery]);
+  }, [searchQuery, visibleSections]);
 
   const handleNavigate = (sectionId: string, fieldId?: string) => {
     setActiveId(sectionId);
@@ -496,7 +537,8 @@ function HyperparameterShell({
     }
   };
 
-  const activeSection = SECTIONS.find((s) => s.id === activeId) ?? SECTIONS[0]!;
+  const activeSection =
+    visibleSections.find((s) => s.id === activeId) ?? visibleSections[0] ?? SECTIONS[0]!;
 
   return (
     <>

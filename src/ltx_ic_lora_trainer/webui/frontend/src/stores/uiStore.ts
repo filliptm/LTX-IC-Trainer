@@ -7,6 +7,13 @@ interface UIState {
   toggleTheme: () => void;
   selectedDatasetIndex: number | null;
   setSelectedDatasetIndex: (i: number | null) => void;
+  /**
+   * When false, the training page hides the "Advanced" and "Research" sidebar
+   * groups, and Essentials sections drop fields that aren't typically touched.
+   * Off by default — surfacing the full ~200-field surface is opt-in.
+   */
+  showAdvancedTraining: boolean;
+  setShowAdvancedTraining: (v: boolean) => void;
 }
 
 export const useUIStore = create<UIState>()(
@@ -20,6 +27,8 @@ export const useUIStore = create<UIState>()(
       toggleTheme: () => get().setTheme(get().theme === "dark" ? "light" : "dark"),
       selectedDatasetIndex: null,
       setSelectedDatasetIndex: (i) => set({ selectedDatasetIndex: i }),
+      showAdvancedTraining: false,
+      setShowAdvancedTraining: (v) => set({ showAdvancedTraining: v }),
     }),
     {
       name: "ltx2-ui",

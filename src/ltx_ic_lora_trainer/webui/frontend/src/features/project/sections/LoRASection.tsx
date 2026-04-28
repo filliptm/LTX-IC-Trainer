@@ -91,12 +91,14 @@ export function LoRASection() {
         label="Network args"
         placeholder='e.g. algo=lora preset=attn-mlp'
         hint="Additional network-module kwargs, space-separated key=value pairs."
+        badge="advanced"
       />
       <TextField
         name="training.network_weights"
         label="Network weights (resume)"
         placeholder="/path/to/existing_lora.safetensors"
         hint="Continue training an existing LoRA instead of starting from scratch."
+        badge="advanced"
       />
       <SwitchField
         name="training.train_connectors"
@@ -108,18 +110,21 @@ export function LoRASection() {
         name="training.save_original_lora"
         label="Save original LoRA"
         hint="Keep the raw LoRA alongside the ComfyUI-converted copy when saving checkpoints."
+        badge="advanced"
       />
       <TextField
         name="training.lycoris_config"
         label="LyCORIS config"
         placeholder="/path/to/lycoris.toml"
         hint="Path to a LyCORIS TOML. Only needed when using a LyCORIS network_module."
+        badge="advanced"
       />
       <SelectField
         name="training.lycoris_quantized_base_check_mode"
         label="LyCORIS quant check"
         options={VERSION_CHECK_MODES}
         hint="How to handle LyCORIS quantized-base compatibility mismatches."
+        badge="advanced"
       />
     </Section>
   );

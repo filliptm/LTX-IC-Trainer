@@ -1,7 +1,9 @@
 import { useEffect, useState, Fragment } from "react";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { useUIStore } from "@/stores/uiStore";
 import { cn } from "@/lib/utils";
 
 export interface SectionNavItem {
@@ -99,11 +101,28 @@ export function HyperparameterSidebar({
       </nav>
 
       <div className="border-t border-border p-2">
-        <div className="px-2 py-1 text-[10px] text-muted-foreground">
+        <ShowAdvancedToggle />
+        <div className="px-2 pt-2 text-[10px] text-muted-foreground">
           Press <kbd className="rounded border border-border bg-muted px-1 font-mono text-[10px]">/</kbd> to search
         </div>
       </div>
     </aside>
+  );
+}
+
+function ShowAdvancedToggle() {
+  const showAdvanced = useUIStore((s) => s.showAdvancedTraining);
+  const setShowAdvanced = useUIStore((s) => s.setShowAdvancedTraining);
+  return (
+    <label className="flex cursor-pointer items-center justify-between gap-2 px-2 py-1.5 hover:bg-muted/40 rounded">
+      <div className="flex flex-col">
+        <span className="text-xs font-medium">Show advanced</span>
+        <span className="text-[10px] leading-tight text-muted-foreground">
+          Reveal Advanced + Research sections
+        </span>
+      </div>
+      <Switch checked={showAdvanced} onCheckedChange={setShowAdvanced} />
+    </label>
   );
 }
 

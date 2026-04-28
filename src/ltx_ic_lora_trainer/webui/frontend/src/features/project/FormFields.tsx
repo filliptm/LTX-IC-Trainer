@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { useUIStore } from "@/stores/uiStore";
 import { cn } from "@/lib/utils";
 
 /**
@@ -44,6 +45,16 @@ const BADGE_CLASS: Record<FieldBadge, string> = {
 };
 
 function Row({ label, hint, children, className, badge, fieldId }: RowProps) {
+  const showAdvanced = useUIStore((s) => s.showAdvancedTraining);
+
+  // Hide advanced/research-tagged fields entirely when the user is in
+  // "essentials only" mode. This keeps Essentials sections lean by default
+  // while preserving the field in the form state — flipping the toggle
+  // brings it back without the user losing any saved value.
+  if (!showAdvanced && (badge === "advanced" || badge === "research")) {
+    return null;
+  }
+
   return (
     <div
       className={cn("grid grid-cols-[200px_1fr] items-start gap-3 transition-shadow", className)}

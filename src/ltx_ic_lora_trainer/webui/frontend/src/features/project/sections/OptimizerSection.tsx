@@ -50,12 +50,14 @@ export function OptimizerSection() {
         step="0.00001"
         nullable
         hint="Override learning rate for audio-branch parameters. Leave empty to use the global LR."
+        badge="advanced"
       />
       <TextAreaField
         name="training.optimizer_args"
         label="Optimizer args"
         placeholder='e.g. weight_decay=0.01 betas=(0.9,0.99)'
         hint="Extra kwargs passed to the optimiser constructor."
+        badge="advanced"
       />
       <SelectOrCustomField
         name="training.lr_scheduler"
@@ -76,6 +78,7 @@ export function OptimizerSection() {
         nullable
         integer
         min={0}
+        badge="advanced"
       />
       <NumberField
         name="training.gradient_accumulation_steps"

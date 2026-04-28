@@ -23,6 +23,7 @@ export function BasicSection() {
         label="Gemma safetensors"
         placeholder="(optional) single-file Gemma checkpoint"
         hint="Alternative to --gemma_root for consolidated Gemma files (e.g. fp8 variants from ComfyUI)."
+        badge="advanced"
       />
       <SelectField
         name="training.ltx2_mode"
@@ -36,6 +37,7 @@ export function BasicSection() {
         label="LTX version"
         options={["2.0", "2.3"]}
         hint="Target LTX-2 generation. Affects default hyperparameters and some internal behaviour."
+        badge="advanced"
       />
       <SelectField
         name="training.ltx_version_check_mode"
@@ -60,6 +62,7 @@ export function BasicSection() {
         name="training.mixed_precision"
         label="Mixed precision"
         options={["no", "fp16", "bf16"]}
+        badge="advanced"
       />
     </Section>
   );
