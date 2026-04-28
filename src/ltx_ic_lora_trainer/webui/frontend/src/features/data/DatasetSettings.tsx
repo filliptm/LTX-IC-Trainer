@@ -149,11 +149,46 @@ export function DatasetSettings({ datasetIndex }: DatasetSettingsProps) {
                   label="Target frames"
                   integer
                   min={1}
+                  tooltip={
+                    <>
+                      The fixed length (in frames) of every training clip the
+                      model sees. Each video on disk is sliced down to exactly
+                      this many frames before going into the trainer.
+                      <br /><br />
+                      <strong>33</strong> is a common choice — it maps cleanly
+                      to LTX-2's VAE temporal stride (no padding waste).
+                      Larger values cost more VRAM and time per step.
+                    </>
+                  }
                 />
                 <SelectField
                   name="frame_extraction"
                   label="Frame extraction"
                   options={["head", "chunk", "slide", "uniform", "full"]}
+                  tooltip={
+                    <>
+                      How the loader picks <em>target_frames</em> out of a
+                      longer source clip:
+                      <br /><br />
+                      <strong>head</strong> · always take the first N frames.
+                      Deterministic, fast, but trains only on the opening of
+                      each video.
+                      <br />
+                      <strong>chunk</strong> · split into non-overlapping
+                      N-frame blocks; each block becomes its own training
+                      item. Multiplies effective dataset size.
+                      <br />
+                      <strong>slide</strong> · sliding window with optional
+                      <em> frame_stride</em>. Like chunk but overlapping —
+                      even more samples, more redundancy.
+                      <br />
+                      <strong>uniform</strong> · pick N frames evenly spaced
+                      across the whole clip. Good for slow motion / panning.
+                      <br />
+                      <strong>full</strong> · use every frame. Only valid when
+                      source clips already have exactly target_frames.
+                    </>
+                  }
                 />
                 <NumberField
                   name="frame_sample"
@@ -161,6 +196,16 @@ export function DatasetSettings({ datasetIndex }: DatasetSettingsProps) {
                   integer
                   nullable
                   hint="Optional"
+                  tooltip={
+                    <>
+                      With <strong>chunk</strong> or <strong>slide</strong>,
+                      caps how many extracted samples are kept per source
+                      video. If a video would yield 12 chunks but you set
+                      <em> frame_sample = 3</em>, you keep 3 random ones.
+                      Useful to stop one long video from dominating the
+                      training distribution.
+                    </>
+                  }
                 />
                 <NumberField
                   name="max_frames"
@@ -168,6 +213,16 @@ export function DatasetSettings({ datasetIndex }: DatasetSettingsProps) {
                   integer
                   nullable
                   hint="Optional"
+                  tooltip={
+                    <>
+                      Hard ceiling on how many raw source frames are read
+                      from each video before extraction runs. With
+                      <em> head + max_frames=300</em> you sample from only
+                      the first 300 source frames; with <em>chunk</em> you
+                      only chunk the first 300. Useful for "ignore everything
+                      past minute 1" without re-encoding the file.
+                    </>
+                  }
                 />
                 <NumberField
                   name="frame_stride"
@@ -175,18 +230,49 @@ export function DatasetSettings({ datasetIndex }: DatasetSettingsProps) {
                   integer
                   nullable
                   hint="Optional"
+                  tooltip={
+                    <>
+                      Step size between consecutive sliding windows when
+                      <em> frame_extraction = slide</em>. Smaller stride =
+                      more overlap = more samples per source video.
+                      <br /><br />
+                      Example: <em>target_frames=33, frame_stride=8</em>{" "}
+                      starts windows at frames 0, 8, 16, 24, … (each window
+                      shares 25 frames with the previous one).
+                    </>
+                  }
                 />
                 <NumberField
                   name="source_fps"
                   label="Source FPS"
                   nullable
                   hint="Optional"
+                  tooltip={
+                    <>
+                      Override the source video's FPS. Normally the loader
+                      reads this from file metadata — only set this if your
+                      videos have wrong/corrupt headers (common with
+                      transcoded files). Pairs with <em>target_fps</em> to do
+                      temporal resampling.
+                    </>
+                  }
                 />
                 <NumberField
                   name="target_fps"
                   label="Target FPS"
                   nullable
                   hint="Optional"
+                  tooltip={
+                    <>
+                      Resample each clip to this FPS before extracting
+                      frames. If your sources are 60 fps but the model should
+                      learn at 24 fps, set <em>target_fps = 24</em> — the
+                      loader drops frames until the effective rate matches.
+                      <br /><br />
+                      LTX-2's native pacing assumes ~24-25 fps, so 24 is the
+                      standard choice for video training.
+                    </>
+                  }
                 />
               </>
             )}

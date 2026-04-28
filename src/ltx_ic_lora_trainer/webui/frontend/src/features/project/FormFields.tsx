@@ -1,10 +1,12 @@
 import { type ReactNode } from "react";
 import { useFormContext, Controller, type FieldValues, type FieldPath } from "react-hook-form";
+import { HelpCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { useUIStore } from "@/stores/uiStore";
 import { cn } from "@/lib/utils";
 
@@ -23,6 +25,13 @@ interface BaseFieldProps<T extends FieldValues = FieldValues> {
   name: FieldPath<T>;
   label: string;
   hint?: string;
+  /**
+   * Long-form explanation surfaced on hover/focus of a small `?` icon next
+   * to the label. Use this instead of `hint` when the explanation is too
+   * verbose to sit inline — `hint` stays always-visible (best for short
+   * defaults like "Optional"), tooltip is for paragraph-length context.
+   */
+  tooltip?: ReactNode;
   placeholder?: string;
   className?: string;
   badge?: FieldBadge;
@@ -31,6 +40,7 @@ interface BaseFieldProps<T extends FieldValues = FieldValues> {
 interface RowProps {
   label: string;
   hint?: string;
+  tooltip?: ReactNode;
   children: ReactNode;
   className?: string;
   badge?: FieldBadge;
@@ -44,7 +54,7 @@ const BADGE_CLASS: Record<FieldBadge, string> = {
   research: "bg-muted text-muted-foreground",
 };
 
-function Row({ label, hint, children, className, badge, fieldId }: RowProps) {
+function Row({ label, hint, tooltip, children, className, badge, fieldId }: RowProps) {
   const showAdvanced = useUIStore((s) => s.showAdvancedTraining);
 
   // Hide advanced/research-tagged fields entirely when the user is in
@@ -62,6 +72,22 @@ function Row({ label, hint, children, className, badge, fieldId }: RowProps) {
     >
       <div className="mt-2 flex items-center gap-1.5">
         <Label className="text-muted-foreground">{label}</Label>
+        {tooltip && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label={`What is ${label}?`}
+                className="inline-flex size-3.5 shrink-0 items-center justify-center text-muted-foreground/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-full"
+              >
+                <HelpCircle className="size-3.5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-xs text-xs leading-relaxed">
+              {tooltip}
+            </TooltipContent>
+          </Tooltip>
+        )}
         {badge && (
           <span
             className={cn(
@@ -85,12 +111,13 @@ export function TextField<T extends FieldValues = FieldValues>({
   name,
   label,
   hint,
+  tooltip,
   placeholder,
   badge,
 }: BaseFieldProps<T>) {
   const { register } = useFormContext<T>();
   return (
-    <Row label={label} hint={hint} badge={badge} fieldId={name as string}>
+    <Row label={label} hint={hint} tooltip={tooltip} badge={badge} fieldId={name as string}>
       <Input {...register(name)} placeholder={placeholder} />
     </Row>
   );
@@ -100,12 +127,13 @@ export function TextAreaField<T extends FieldValues = FieldValues>({
   name,
   label,
   hint,
+  tooltip,
   placeholder,
   badge,
 }: BaseFieldProps<T>) {
   const { register } = useFormContext<T>();
   return (
-    <Row label={label} hint={hint} badge={badge} fieldId={name as string}>
+    <Row label={label} hint={hint} tooltip={tooltip} badge={badge} fieldId={name as string}>
       <Textarea {...register(name)} placeholder={placeholder} />
     </Row>
   );
@@ -130,6 +158,7 @@ export function NumberField<T extends FieldValues = FieldValues>({
   name,
   label,
   hint,
+  tooltip,
   placeholder,
   step,
   min,
@@ -140,7 +169,7 @@ export function NumberField<T extends FieldValues = FieldValues>({
 }: NumberFieldProps<T>) {
   const { control } = useFormContext<T>();
   return (
-    <Row label={label} hint={hint} badge={badge} fieldId={name as string}>
+    <Row label={label} hint={hint} tooltip={tooltip} badge={badge} fieldId={name as string}>
       <Controller
         control={control}
         name={name}
@@ -176,6 +205,7 @@ export function SelectField<T extends FieldValues = FieldValues>({
   name,
   label,
   hint,
+  tooltip,
   options,
   badge,
 }: SelectFieldProps<T>) {
@@ -184,7 +214,7 @@ export function SelectField<T extends FieldValues = FieldValues>({
     typeof o === "string" ? { value: o, label: o } : o,
   );
   return (
-    <Row label={label} hint={hint} badge={badge} fieldId={name as string}>
+    <Row label={label} hint={hint} tooltip={tooltip} badge={badge} fieldId={name as string}>
       <Select {...register(name)}>
         {normalised.map((o) => (
           <option key={o.value} value={o.value}>
@@ -200,11 +230,12 @@ export function SwitchField<T extends FieldValues = FieldValues>({
   name,
   label,
   hint,
+  tooltip,
   badge,
 }: BaseFieldProps<T>) {
   const { control } = useFormContext<T>();
   return (
-    <Row label={label} hint={hint} badge={badge} fieldId={name as string}>
+    <Row label={label} hint={hint} tooltip={tooltip} badge={badge} fieldId={name as string}>
       <div className="flex h-9 items-center">
         <Controller
           control={control}
@@ -239,6 +270,7 @@ export function SelectOrCustomField<T extends FieldValues = FieldValues>({
   name,
   label,
   hint,
+  tooltip,
   placeholder,
   options,
   badge,
@@ -250,7 +282,7 @@ export function SelectOrCustomField<T extends FieldValues = FieldValues>({
   const presetValues = new Set(normalised.map((o) => o.value));
 
   return (
-    <Row label={label} hint={hint} badge={badge} fieldId={name as string}>
+    <Row label={label} hint={hint} tooltip={tooltip} badge={badge} fieldId={name as string}>
       <Controller
         control={control}
         name={name}

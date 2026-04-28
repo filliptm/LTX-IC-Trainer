@@ -390,7 +390,7 @@ Hand-written shadcn-style primitives. No `shadcn/ui` CLI — these are just 15 s
 | `HyperparameterSidebar` | Context-panel rendering of the section list. Quick-jump nav into the open accordion item; mirrors the section order on the main page. |
 | `TrainingActionRail` | Sticky action rail surfacing Start / Stop / Pause / Resume controls plus pipeline (cache-then-train) status, alongside the form. |
 | `Section` / `SubGroup` | Layout wrappers for the inside of each accordion section. |
-| `FormFields` | TextField / TextAreaField / NumberField / SelectField / SwitchField. All bind to the ambient `useFormContext` so sections stay as dumb fragments. NumberField supports nullable (Pydantic Optional[int/float]) and integer vs float modes. |
+| `FormFields` | TextField / TextAreaField / NumberField / SelectField / SwitchField / SelectOrCustomField. All bind to the ambient `useFormContext` so sections stay as dumb fragments. NumberField supports nullable (Pydantic Optional[int/float]) and integer vs float modes. Every field accepts `hint` (always-visible inline text under the input) and `tooltip` (long-form ReactNode shown on hover/focus of a small `?` icon next to the label) — use `tooltip` for paragraph-length explanations so the form stays compact. |
 | `sections/*` | 8 section files: Basic, LoRA, Optimizer, Schedule, Memory (quantisation + attention + compile), Sampling, Validation, ResearchFeatures (CREPA, Self-Flow, HFATO, preservation, TARP/DCR, audio loss balance, audio metrics, modality freezer, cross-task synergy, audio supervision). |
 
 **Feature components — Dataset tab** ([`src/features/dataset/`](../src/ltx_ic_lora_trainer/webui/frontend/src/features/dataset/)):
