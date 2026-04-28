@@ -125,6 +125,7 @@ usage: python -m ltx_ic_lora_trainer.webui [-h] [--port PORT] [--host HOST]
 | POST | `/api/dataset/{index}/upload` | Upload files to a dataset's target or reference directory. Form: `files`, `slot` ("target"\|"reference"), `caption_extension`. Target uploads auto-create blank caption files. |
 | GET | `/api/dataset/{index}/media/{file_path}` | Serve media from a dataset's target or reference directory. Query: `slot` ("target"\|"reference"). Path-traversal protected. |
 | GET | `/api/dataset/{index}/thumb/{file_path:path}` | Serve a thumbnail for a dataset media file (auto-generated for video and image assets, cached on disk). Path-traversal protected. |
+| GET | `/api/dataset/{index}/buckets` | Preview which LTX-2 aspect-ratio buckets the dataset's files will land in for a given target area. Query: `width` (default = entry's `resolution_w`), `height` (default = entry's `resolution_h`), `slot` ("target"\|"reference"), `max_files` (default 2000). Reproduces `BucketSelector`'s 32-px-grid bucket math without importing dataset code, walks the directory non-recursively, probes per-file dimensions via PIL (images) / cv2 (videos) header reads — no full decode. Returns `{target_area, target_resolution, buckets: [{resolution, aspect, count, items}], unreadable, scanned, truncated}`. Audio + unknown extensions are skipped; corrupt headers go to `unreadable`. |
 
 #### Processes — [`routers/processes.py`](../src/ltx_ic_lora_trainer/webui/routers/processes.py)
 
@@ -428,7 +429,8 @@ Hand-written shadcn-style primitives. No `shadcn/ui` CLI — these are just 15 s
 | `DatasetToolbar` | Upload bar with drag-and-drop zone. Separate buttons for target and reference uploads. Search filter and asset count. |
 | `MediaGrid` | Responsive CSS grid of `MediaTile` components. 1-3 columns responsive. Fetches assets via `useDatasetAssets`. |
 | `MediaTile` | Single grid tile: target + reference media side-by-side (video hover-to-play, synced), inline caption textarea with auto-save on blur and Ctrl+S. Uses `GET /api/dataset/{index}/media/{path}` and `…/thumb/{path}` for serving. |
-| `DatasetSettings` | Fixed right panel (w-72) with dataset-level settings: type, resolution, batch size, repeats, caption extension, video-only options. Own `FormProvider` instance; saves via `PUT /api/project`. |
+| `DatasetSettings` | Fixed right panel (w-80) with dataset-level settings: type, target width/height (with tooltips explaining bucketing), batch size, repeats, caption extension, video-only options. Includes an "Aspect-aware bucketing on" badge above the resolution fields and a live `BucketPreview` histogram below them — when the user types a new target W/H, the histogram re-runs (300ms debounce) so they can see which buckets their actual dataset will populate before saving. Own `FormProvider` instance; saves via `PUT /api/project`. |
+| `BucketPreview` | Live histogram of LTX-2 bucket assignments, rendered inside `DatasetSettings`. Uses `useDatasetBuckets` to call `GET /api/dataset/{index}/buckets`. Each row shows a horizontal bar (% of max count), the bucket resolution, an aspect-ratio label (e.g. `9:16 portrait`, `16:9 landscape`, `square`), and the count. Click a row to expand the file list. Surfaces `unreadable` (corrupt-header files) in a collapsible warning row and `truncated` when the dataset exceeds `max_files=2000`. |
 
 **Feature components — shared** ([`src/features/captions/`](../src/ltx_ic_lora_trainer/webui/frontend/src/features/captions/)):
 

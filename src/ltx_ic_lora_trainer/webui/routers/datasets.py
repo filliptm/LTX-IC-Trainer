@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import math
 import os
 import re
 import unicodedata
 from pathlib import Path
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, Request, UploadFile, File, Form
 from fastapi.responses import FileResponse
@@ -50,6 +52,85 @@ def _slugify(name: str) -> str:
     name = re.sub(r"[\s_]+", "-", name)
     name = re.sub(r"-+", "-", name).strip("-")
     return name or "dataset"
+
+
+# ---------------------------------------------------------------------------
+# Bucket-preview helpers (Phase 2 of the bucket-aware resolution UI)
+#
+# These mirror BucketSelector in
+# src/ltx_ic_lora_trainer/dataset/image_video_dataset.py so the webui can
+# preview which buckets a dataset will populate without importing the
+# dataset machinery into the router. If the upstream algorithm changes,
+# these helpers will silently drift — keep an eye on the source line ranges
+# referenced below.
+# ---------------------------------------------------------------------------
+
+
+def _divisible_by(n: int, d: int) -> int:
+    return n - (n % d)
+
+
+def _compute_buckets(target_w: int, target_h: int, reso_steps: int = 32) -> list[tuple[int, int]]:
+    """Reproduce BucketSelector's bucket family for an LTX-2 target area.
+
+    Mirrors BucketSelector.__init__ in image_video_dataset.py (lines 439-448).
+    Reimplemented here to keep the webui router decoupled from dataset code.
+    """
+    bucket_area = target_w * target_h
+    sqrt_size = int(math.sqrt(bucket_area))
+    min_size = _divisible_by(sqrt_size // 2, reso_steps)
+    buckets: list[tuple[int, int]] = []
+    for w in range(min_size, sqrt_size + reso_steps, reso_steps):
+        if w <= 0:
+            continue
+        h = _divisible_by(bucket_area // w, reso_steps)
+        if h <= 0:
+            continue
+        buckets.append((w, h))
+        buckets.append((h, w))
+    return sorted(set(buckets))
+
+
+def _nearest_bucket(image_size: tuple[int, int], buckets: list[tuple[int, int]]) -> Optional[tuple[int, int]]:
+    """Mirrors BucketSelector.get_bucket_resolution lines 464-467."""
+    w, h = image_size
+    if w <= 0 or h <= 0 or not buckets:
+        return None
+    aspect = w / h
+    return min(buckets, key=lambda b: abs((b[0] / b[1]) - aspect))
+
+
+def _probe_image(path: str) -> Optional[tuple[int, int]]:
+    """Header-only read; PIL.Image.open is lazy and only reads metadata for .size."""
+    try:
+        from PIL import Image
+        with Image.open(path) as im:
+            return im.size
+    except Exception:
+        return None
+
+
+def _probe_video(path: str) -> Optional[tuple[int, int]]:
+    """Container-only read; cv2.VideoCapture.get(CAP_PROP_FRAME_*) doesn't decode."""
+    try:
+        import cv2
+        cap = cv2.VideoCapture(path)
+        try:
+            w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        finally:
+            cap.release()
+        return (w, h) if w > 0 and h > 0 else None
+    except Exception:
+        return None
+
+
+def _probe_dimensions(path: str, ext_kind: str) -> Optional[tuple[int, int]]:
+    if ext_kind == "image":
+        return _probe_image(path)
+    if ext_kind == "video":
+        return _probe_video(path)
+    return None  # audio + unknown skipped
 
 
 # ---------------------------------------------------------------------------
@@ -450,6 +531,133 @@ async def get_dataset_assets(
     total = len(assets)
     page = assets[offset: offset + limit]
     return {"total": total, "assets": page}
+
+
+# ---------------------------------------------------------------------------
+# GET /api/dataset/{index}/buckets — preview bucket assignment histogram
+# ---------------------------------------------------------------------------
+
+
+@router.get("/{index}/buckets")
+async def get_dataset_buckets(
+    index: int,
+    request: Request,
+    width: Optional[int] = Query(None, ge=64, le=8192),
+    height: Optional[int] = Query(None, ge=64, le=8192),
+    slot: str = Query("target"),
+    max_files: int = Query(2000, ge=1, le=10000),
+):
+    """Preview which LTX-2 buckets the dataset's files will land in for a
+    given target (W, H) area.
+
+    The trainer (BucketSelector) generates a 32-pixel-grid family of bucket
+    resolutions sharing the target area, in both portrait and landscape
+    orientations, and assigns each clip to the nearest aspect-ratio match.
+    This route reproduces that math without importing the dataset code, so
+    the UI can show "given my target area + my files, here's what training
+    will actually use."
+
+    Empty / unreadable / capped cases all return 200 with a structured
+    response — the frontend renders graceful states.
+    """
+    config = _get_config(request)
+    datasets = config.dataset.datasets
+    if index < 0 or index >= len(datasets):
+        raise HTTPException(status_code=404, detail=f"Dataset index {index} out of range")
+
+    entry = datasets[index]
+
+    if slot == "target":
+        base_dir = entry.directory
+    elif slot == "reference":
+        base_dir = entry.reference_directory
+    else:
+        raise HTTPException(status_code=422, detail=f"Invalid slot: {slot}")
+
+    if not base_dir:
+        raise HTTPException(status_code=400, detail=f"No {slot} directory configured for this dataset")
+
+    target_w = width if width is not None else entry.resolution_w
+    target_h = height if height is not None else entry.resolution_h
+    if target_w <= 0 or target_h <= 0:
+        raise HTTPException(status_code=422, detail="Target width/height must be positive")
+
+    real_base = os.path.realpath(base_dir)
+    if not os.path.isdir(real_base):
+        raise HTTPException(status_code=404, detail="Dataset directory not found")
+
+    buckets = _compute_buckets(target_w, target_h)
+    if not buckets:
+        return {
+            "target_area": target_w * target_h,
+            "target_resolution": [target_w, target_h],
+            "buckets": [],
+            "unreadable": [],
+            "scanned": 0,
+            "truncated": False,
+        }
+
+    assignments: dict[tuple[int, int], list[str]] = {}
+    unreadable: list[str] = []
+    scanned = 0
+    truncated = False
+
+    try:
+        names = sorted(os.listdir(real_base))
+    except OSError:
+        names = []
+
+    for name in names:
+        if name.startswith(".") or name == ".thumbs":
+            continue
+        full = os.path.join(real_base, name)
+        # Defend against symlinks pointing outside the dataset directory.
+        real_full = os.path.realpath(full)
+        if not real_full.startswith(real_base + os.sep) and real_full != real_base:
+            continue
+        if not os.path.isfile(real_full):
+            continue
+        ext = os.path.splitext(name)[1]
+        kind = _classify(ext)
+        if kind not in ("image", "video"):
+            # audio + unknown skipped — they don't have spatial buckets.
+            continue
+        if scanned >= max_files:
+            truncated = True
+            break
+        scanned += 1
+
+        dims = _probe_dimensions(real_full, kind)
+        if dims is None:
+            unreadable.append(name)
+            continue
+        bucket = _nearest_bucket(dims, buckets)
+        if bucket is None:
+            unreadable.append(name)
+            continue
+        assignments.setdefault(bucket, []).append(name)
+
+    result_buckets = [
+        {
+            "resolution": [w, h],
+            "aspect": round(w / h, 4),
+            "count": len(items),
+            "items": sorted(items),
+        }
+        for (w, h), items in sorted(
+            assignments.items(),
+            key=lambda kv: (-len(kv[1]), kv[0]),
+        )
+    ]
+
+    return {
+        "target_area": target_w * target_h,
+        "target_resolution": [target_w, target_h],
+        "buckets": result_buckets,
+        "unreadable": unreadable,
+        "scanned": scanned,
+        "truncated": truncated,
+    }
 
 
 # ---------------------------------------------------------------------------

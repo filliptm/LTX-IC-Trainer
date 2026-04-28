@@ -156,3 +156,53 @@ export function useSetThumbnail() {
     },
   });
 }
+
+// ---------------------------------------------------------------------------
+// Bucket preview — given a target (W, H) area, ask the backend to walk the
+// dataset's media files, probe their dimensions, and report which LTX-2
+// aspect-ratio bucket each file lands in. Powers <BucketPreview> on the
+// dataset settings panel.
+// ---------------------------------------------------------------------------
+
+export interface BucketRow {
+  resolution: [number, number];
+  aspect: number;
+  count: number;
+  items: string[];
+}
+
+export interface DatasetBucketsResponse {
+  target_area: number;
+  target_resolution: [number, number];
+  buckets: BucketRow[];
+  unreadable: string[];
+  scanned: number;
+  truncated: boolean;
+}
+
+export function useDatasetBuckets(
+  datasetIndex: number | null,
+  width: number | null,
+  height: number | null,
+  slot: "target" | "reference" = "target",
+) {
+  return useQuery<DatasetBucketsResponse>({
+    queryKey: ["dataset", datasetIndex, "buckets", slot, width, height],
+    queryFn: () => {
+      const qs = new URLSearchParams();
+      if (width != null) qs.set("width", String(width));
+      if (height != null) qs.set("height", String(height));
+      qs.set("slot", slot);
+      return api.get<DatasetBucketsResponse>(
+        `/api/dataset/${datasetIndex}/buckets?${qs.toString()}`,
+      );
+    },
+    enabled:
+      datasetIndex !== null &&
+      width != null &&
+      height != null &&
+      width > 0 &&
+      height > 0,
+    staleTime: 5_000,
+  });
+}

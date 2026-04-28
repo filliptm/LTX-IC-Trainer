@@ -4,12 +4,14 @@ import { Save } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { useProject, useUpdateProject } from "@/api/projects";
 import {
   TextField,
   NumberField,
   SelectField,
 } from "@/features/project/FormFields";
+import { BucketPreview } from "./BucketPreview";
 
 interface DatasetSettingsProps {
   datasetIndex: number;
@@ -60,6 +62,10 @@ export function DatasetSettings({ datasetIndex }: DatasetSettingsProps) {
   const isDirty = methods.formState.isDirty;
   const watchType = methods.watch("type");
   const isVideo = watchType === "video";
+  // Live-watch the resolution so the BucketPreview re-runs as the user types
+  // the target dimensions (debounced inside the component itself).
+  const watchedW = methods.watch("resolution_w");
+  const watchedH = methods.watch("resolution_h");
 
   const handleSave = methods.handleSubmit(async (data) => {
     if (!project?.config) return;
@@ -105,20 +111,60 @@ export function DatasetSettings({ datasetIndex }: DatasetSettingsProps) {
               label="Type"
               options={["video", "image", "audio"]}
             />
+            <div className="-mt-1 flex items-center gap-2">
+              <Badge variant="secondary" className="text-[10px]">
+                Aspect-aware bucketing on
+              </Badge>
+            </div>
             <NumberField
               name="resolution_w"
-              label="Width"
+              label="Target width"
               integer
               min={64}
               step={64}
+              tooltip={
+                <>
+                  Target <em>area</em> width — not a hard canvas size. The
+                  trainer auto-buckets every clip to the nearest aspect ratio
+                  that shares this <strong>W × H</strong> area, snapped to a
+                  32-pixel grid.
+                  <br /><br />
+                  Both portrait and landscape orientations are generated
+                  automatically, so a <em>1024 × 576</em> target accepts 9:16
+                  vertical inputs without distortion.
+                  <br /><br />
+                  Multiple of 64 recommended.
+                </>
+              }
             />
             <NumberField
               name="resolution_h"
-              label="Height"
+              label="Target height"
               integer
               min={64}
               step={64}
+              tooltip={
+                <>
+                  Target <em>area</em> height — not a hard canvas size. The
+                  trainer auto-buckets every clip to the nearest aspect ratio
+                  that shares this <strong>W × H</strong> area, snapped to a
+                  32-pixel grid.
+                  <br /><br />
+                  Both portrait and landscape orientations are generated
+                  automatically, so a <em>1024 × 576</em> target accepts 9:16
+                  vertical inputs without distortion.
+                  <br /><br />
+                  Multiple of 64 recommended.
+                </>
+              }
             />
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3">
+              <BucketPreview
+                datasetIndex={datasetIndex}
+                width={Number(watchedW)}
+                height={Number(watchedH)}
+              />
+            </div>
             <NumberField
               name="batch_size"
               label="Batch size"
