@@ -81,23 +81,6 @@ export function BasicSection() {
         badge="advanced"
       />
       <TextField
-        name="training.output_dir"
-        label="Output directory"
-        placeholder="/path/to/output"
-        hint="Where checkpoints, state, logs, and samples are written."
-        badge="essential"
-        tooltip={
-          <>
-            Where checkpoints (<em>.safetensors</em>), accelerator state
-            directories, training logs, and validation samples land. Created
-            automatically if it doesn't exist.
-            <br /><br />
-            Each save also writes a <em>.comfy.safetensors</em> companion
-            file in ComfyUI-compatible format.
-          </>
-        }
-      />
-      <TextField
         name="training.output_name"
         label="Output name"
         hint="Prefix for saved LoRA files. e.g. 'my_lora' → my_lora.safetensors"

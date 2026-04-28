@@ -65,7 +65,6 @@ const SECTIONS: SectionDef[] = [
       { id: "training.gemma_safetensors", label: "Gemma safetensors" },
       { id: "training.ltx2_mode", label: "Mode (video / audio / av)" },
       { id: "training.ltx_version", label: "LTX version" },
-      { id: "training.output_dir", label: "Output directory" },
       { id: "training.output_name", label: "Output name" },
       { id: "training.mixed_precision", label: "Mixed precision" },
     ],

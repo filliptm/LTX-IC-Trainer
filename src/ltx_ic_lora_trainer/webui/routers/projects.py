@@ -59,6 +59,26 @@ def _slugify(name: str) -> str:
     return s or "project"
 
 
+def _apply_app_managed_paths(config: ProjectConfig) -> None:
+    """Force training/inference output paths to the canonical project layout.
+
+    These directories are app-managed — they always live under the project's
+    own directory regardless of what the user sent in the request body. The
+    UI deliberately does not surface these fields anymore; calling this on
+    create, load, and update keeps them locked to:
+
+        <project_dir>/output      — training checkpoints, state, dashboard, samples
+        <project_dir>/logs        — tensorboard / wandb logs
+        <project_dir>/inference   — generated videos from inference runs
+    """
+    if not config.project_dir:
+        return
+    base = Path(config.project_dir)
+    config.training.output_dir = str(base / "output")
+    config.training.logging_dir = str(base / "logs")
+    config.inference.output_dir = str(base / "inference")
+
+
 @router.get("")
 async def get_project(request: Request):
     state = _get_state(request)
@@ -111,6 +131,10 @@ async def create_project(body: dict, request: Request):
     config.project_dir = str(base)
     project_json = base / "project.json"
 
+    # Lock training/inference output paths to the project's own directory.
+    # These are app-managed and never user-editable.
+    _apply_app_managed_paths(config)
+
     # Each project ships with one default dataset so the user lands on a usable
     # workspace immediately — no "+" click to do anything. The schema still
     # supports multiple datasets per project for advanced cases (mixed media
@@ -154,6 +178,11 @@ async def update_project(body: dict, request: Request):
         updated = ProjectConfig(**body)
     except Exception as e:
         raise HTTPException(status_code=422, detail=str(e))
+
+    # Re-apply app-managed paths on every save so a malformed body or a
+    # stale frontend cache can't leak user-supplied output paths into the
+    # config — these are always derived from project_dir.
+    _apply_app_managed_paths(updated)
 
     project_path = state.project_path
     updated.save(project_path)
@@ -210,6 +239,23 @@ async def load_project(body: dict, request: Request):
         config = ProjectConfig.load(candidate)
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"Failed to load: {e}")
+
+    # Migrate / heal: existing projects on disk may have empty or stale
+    # output paths from before they were app-managed. Re-derive them from
+    # project_dir and persist if anything actually changed.
+    before = (
+        config.training.output_dir,
+        config.training.logging_dir,
+        config.inference.output_dir,
+    )
+    _apply_app_managed_paths(config)
+    after = (
+        config.training.output_dir,
+        config.training.logging_dir,
+        config.inference.output_dir,
+    )
+    if before != after:
+        config.save(candidate)
 
     state.project_config = config
     state.project_path = candidate
