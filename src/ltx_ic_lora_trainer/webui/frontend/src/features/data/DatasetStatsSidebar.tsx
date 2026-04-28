@@ -8,11 +8,6 @@ import { DurationPreview } from "./DurationPreview";
 
 const EMPTY_TRAINER: DatasetBucketsTrainerParams = {};
 
-/**
- * Left context-panel content for the Data page when a project is loaded.
- * Shows dataset-level stats: bucket distribution, duration histogram,
- * sample count estimate, and a dropped-videos warning.
- */
 export function DatasetStatsSidebar() {
   const { data: project } = useProject();
 
@@ -39,23 +34,85 @@ export function DatasetStatsSidebar() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex h-10 shrink-0 items-center justify-center border-b border-border px-3">
-        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+      {/* Panel header */}
+      <div className="flex h-10 shrink-0 items-center border-b border-border px-4">
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           Dataset Stats
         </span>
       </div>
 
-      <div className="flex-1 overflow-y-auto scrollbar-thin p-3 space-y-4">
+      <div className="flex-1 overflow-y-auto scrollbar-thin">
+        {/* Training samples — headline stat */}
+        <TrainingSamplesCard datasetIndex={0} w={w} h={h} trainer={trainer} />
+
+        {/* Dropped videos warning — only shown when non-zero */}
         <DroppedVideosWarning datasetIndex={0} w={w} h={h} trainer={trainer} />
 
-        <section>
+        {/* Divider + section */}
+        <SectionBlock label="Aspect Buckets">
           <BucketPreview datasetIndex={0} width={w} height={h} trainer={trainer} />
-        </section>
+        </SectionBlock>
 
-        <section>
+        <SectionBlock label="Frame Distribution">
           <DurationPreview datasetIndex={0} width={w} height={h} trainer={trainer} />
-        </section>
+        </SectionBlock>
       </div>
+    </div>
+  );
+}
+
+function SectionBlock({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="border-t border-border">
+      <div className="px-4 pt-3 pb-1">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          {label}
+        </p>
+      </div>
+      <div className="px-4 pb-4">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function TrainingSamplesCard({
+  datasetIndex,
+  w,
+  h,
+  trainer,
+}: {
+  datasetIndex: number;
+  w: number;
+  h: number;
+  trainer: DatasetBucketsTrainerParams;
+}) {
+  const { data } = useDatasetBuckets(
+    datasetIndex,
+    w > 0 ? w : null,
+    h > 0 ? h : null,
+    "target",
+    trainer ?? EMPTY_TRAINER,
+  );
+
+  const samples = data?.estimated_training_samples;
+
+  return (
+    <div className="px-4 py-4">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        Training Samples / Epoch
+      </p>
+      <div className="mt-1.5 flex items-baseline gap-1.5">
+        <span className="font-mono text-2xl font-bold tabular-nums text-foreground">
+          {samples != null ? samples.toLocaleString() : "—"}
+        </span>
+        <span className="text-xs text-muted-foreground">samples</span>
+      </div>
+      {data && (
+        <p className="mt-1 text-[10px] text-muted-foreground leading-snug">
+          {describeEstimate(trainer, data.video_count, data.image_count)}
+        </p>
+      )}
     </div>
   );
 }
@@ -87,20 +144,37 @@ function DroppedVideosWarning({
   const tf = trainer.target_frames;
 
   return (
-    <div className="rounded-md border border-[hsl(var(--status-warning))]/40 bg-[hsl(var(--status-warning))]/8 p-3">
+    <div className="mx-4 mb-1 rounded-md border border-amber-500/30 bg-amber-500/8 px-3 py-2.5">
       <div className="flex items-start gap-2">
-        <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-[hsl(var(--status-warning))]" />
-        <div className="space-y-1">
-          <p className="text-[11px] font-semibold text-[hsl(var(--status-warning))]">
-            {dropped} of {total} video{total !== 1 ? "s" : ""} will be dropped ({pct}%)
+        <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-amber-500" />
+        <div>
+          <p className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+            {dropped} of {total} video{total !== 1 ? "s" : ""} dropped ({pct}%)
           </p>
-          <p className="text-[11px] text-muted-foreground leading-snug">
+          <p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
             {tf
-              ? `Too short for target_frames=${tf}. They produce zero training samples and are silently skipped.`
-              : "Too short for the current target_frames setting. They produce zero training samples and are silently skipped."}
+              ? `Shorter than target_frames=${tf} — silently skipped.`
+              : "Too short for current target_frames — silently skipped."}
           </p>
         </div>
       </div>
     </div>
   );
+}
+
+function describeEstimate(
+  trainer: DatasetBucketsTrainerParams,
+  videoCount: number,
+  imageCount: number,
+): string {
+  const parts: string[] = [];
+  if (videoCount > 0) {
+    const tf = trainer.target_frames ?? "?";
+    const ext = trainer.frame_extraction ?? "head";
+    parts.push(`${videoCount} video${videoCount === 1 ? "" : "s"} · ${ext}, ${tf}f`);
+  }
+  if (imageCount > 0) {
+    parts.push(`${imageCount} image${imageCount === 1 ? "" : "s"}`);
+  }
+  return parts.join(" + ") || "No trainable media";
 }

@@ -125,6 +125,29 @@ def _probe_image(path: str) -> Optional[_MediaInfo]:
         return None
 
 
+def _probe_frame_count_ffprobe(path: str, fps: float) -> Optional[int]:
+    """Use ffprobe to get container duration and compute frame count as
+    round(duration_s * fps). Silent no-op if ffprobe is not on PATH."""
+    try:
+        import subprocess, json
+        result = subprocess.run(
+            [
+                "ffprobe", "-v", "quiet", "-print_format", "json",
+                "-show_entries", "format=duration", path,
+            ],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode != 0:
+            return None
+        info = json.loads(result.stdout)
+        dur = float(info.get("format", {}).get("duration", 0))
+        if dur > 0:
+            return max(1, round(dur * fps))
+        return None
+    except Exception:
+        return None
+
+
 def _probe_video(path: str) -> Optional[_MediaInfo]:
     """Container-only read; cv2.VideoCapture.get(...) reads only the header.
 
@@ -145,11 +168,21 @@ def _probe_video(path: str) -> Optional[_MediaInfo]:
             cap.release()
         if w <= 0 or h <= 0:
             return None
+        resolved_fps = fps if fps > 0 else None
+        # CAP_PROP_FRAME_COUNT is unreliable for many containers (VBR mp4,
+        # webm, etc.). When cv2 returns 0, estimate from container duration ×
+        # fps using ffprobe, which reads the container header accurately.
+        if fc > 0:
+            resolved_fc = fc
+        elif resolved_fps:
+            resolved_fc = _probe_frame_count_ffprobe(path, resolved_fps)
+        else:
+            resolved_fc = None
         return _MediaInfo(
             width=w,
             height=h,
-            frame_count=fc if fc > 0 else None,
-            fps=fps if fps > 0 else None,
+            frame_count=resolved_fc,
+            fps=resolved_fps,
         )
     except Exception:
         return None
@@ -163,58 +196,55 @@ def _probe_media(path: str, ext_kind: str) -> Optional[_MediaInfo]:
     return None  # audio + unknown skipped
 
 
-# Duration histogram bins (seconds). Open at the top end via "30+".
-_DURATION_BINS = [
-    ("0-2s", 0.0, 2.0),
-    ("2-5s", 2.0, 5.0),
-    ("5-10s", 5.0, 10.0),
-    ("10-30s", 10.0, 30.0),
-    ("30s+", 30.0, float("inf")),
+# Frame-count histogram bins. Open at the top end via "500+".
+_FRAME_BINS = [
+    ("1-17", 1, 17),
+    ("17-33", 17, 33),
+    ("33-65", 33, 65),
+    ("65-129", 65, 129),
+    ("129-257", 129, 257),
+    ("257-513", 257, 513),
+    ("513+", 513, float("inf")),
 ]
 
 
-def _build_duration_distribution(durations: list[float]) -> dict:
-    """Bin a list of clip durations and compute summary stats.
-
-    Returns the shape consumed by DurationPreview on the frontend:
-    bins, total_s, avg_s, p50, p95, count.
-    """
-    if not durations:
+def _build_frame_distribution(frame_counts: list[int]) -> dict:
+    """Bin a list of raw video frame counts and compute summary stats."""
+    if not frame_counts:
         return {
-            "bins": [{"label": label, "min_s": lo, "max_s": (None if hi == float("inf") else hi), "count": 0}
-                     for label, lo, hi in _DURATION_BINS],
+            "bins": [{"label": label, "min_f": lo, "max_f": (None if hi == float("inf") else hi), "count": 0}
+                     for label, lo, hi in _FRAME_BINS],
             "count": 0,
-            "total_s": 0.0,
-            "avg_s": 0.0,
-            "p50": 0.0,
-            "p95": 0.0,
-            "min_s": 0.0,
-            "max_s": 0.0,
+            "total": 0,
+            "avg": 0.0,
+            "p50": 0,
+            "p95": 0,
+            "min": 0,
+            "max": 0,
         }
     bins = []
-    for label, lo, hi in _DURATION_BINS:
-        n = sum(1 for d in durations if lo <= d < hi)
+    for label, lo, hi in _FRAME_BINS:
+        n = sum(1 for f in frame_counts if lo <= f < hi)
         bins.append({
             "label": label,
-            "min_s": lo,
-            "max_s": (None if hi == float("inf") else hi),
+            "min_f": lo,
+            "max_f": (None if hi == float("inf") else hi),
             "count": n,
         })
-    sorted_durs = sorted(durations)
-    n = len(sorted_durs)
-    p50 = sorted_durs[n // 2]
-    # p95 with the standard nearest-rank formula
+    sorted_fc = sorted(frame_counts)
+    n = len(sorted_fc)
+    p50 = sorted_fc[n // 2]
     p95_idx = max(0, min(n - 1, int(round(0.95 * (n - 1)))))
-    p95 = sorted_durs[p95_idx]
+    p95 = sorted_fc[p95_idx]
     return {
         "bins": bins,
         "count": n,
-        "total_s": sum(durations),
-        "avg_s": sum(durations) / n,
+        "total": sum(frame_counts),
+        "avg": sum(frame_counts) / n,
         "p50": p50,
         "p95": p95,
-        "min_s": sorted_durs[0],
-        "max_s": sorted_durs[-1],
+        "min": sorted_fc[0],
+        "max": sorted_fc[-1],
     }
 
 
@@ -775,7 +805,7 @@ async def get_dataset_buckets(
         "unreadable": [],
         "scanned": 0,
         "truncated": False,
-        "duration_distribution": _build_duration_distribution([]),
+        "frame_distribution": _build_frame_distribution([]),
         "video_count": 0,
         "image_count": 0,
         "estimated_training_samples": 0,
@@ -788,7 +818,7 @@ async def get_dataset_buckets(
     unreadable: list[str] = []
     scanned = 0
     truncated = False
-    durations: list[float] = []
+    frame_counts: list[int] = []
     video_count = 0
     image_count = 0
     # Per-video tuples driving the sample-count estimator.
@@ -831,10 +861,10 @@ async def get_dataset_buckets(
 
         if kind == "video":
             video_count += 1
-            dur = info.duration_s
-            if dur is not None and dur > 0:
-                durations.append(dur)
+            if info.frame_count and info.frame_count > 0:
+                frame_counts.append(info.frame_count)
             if info.frame_count and info.fps:
+                dur = info.duration_s
                 durations_with_frames.append((dur or 0.0, info.frame_count, info.fps))
         else:
             image_count += 1
@@ -874,7 +904,7 @@ async def get_dataset_buckets(
         "unreadable": unreadable,
         "scanned": scanned,
         "truncated": truncated,
-        "duration_distribution": _build_duration_distribution(durations),
+        "frame_distribution": _build_frame_distribution(frame_counts),
         "video_count": video_count,
         "image_count": image_count,
         "estimated_training_samples": estimated_total,

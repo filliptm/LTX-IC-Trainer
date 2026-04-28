@@ -171,23 +171,23 @@ export interface BucketRow {
   items: string[];
 }
 
-export interface DurationBin {
+export interface FrameBin {
   label: string;
-  min_s: number;
-  /** null marks the open-ended top bin (e.g. "30s+"). */
-  max_s: number | null;
+  min_f: number;
+  /** null marks the open-ended top bin (e.g. "513+"). */
+  max_f: number | null;
   count: number;
 }
 
-export interface DurationDistribution {
-  bins: DurationBin[];
+export interface FrameDistribution {
+  bins: FrameBin[];
   count: number;
-  total_s: number;
-  avg_s: number;
+  total: number;
+  avg: number;
   p50: number;
   p95: number;
-  min_s: number;
-  max_s: number;
+  min: number;
+  max: number;
 }
 
 export interface DatasetBucketsResponse {
@@ -197,8 +197,8 @@ export interface DatasetBucketsResponse {
   unreadable: string[];
   scanned: number;
   truncated: boolean;
-  /** Histogram + summary stats over source-clip durations (videos only). */
-  duration_distribution: DurationDistribution;
+  /** Histogram + summary stats over source-clip frame counts (videos only). */
+  frame_distribution: FrameDistribution;
   video_count: number;
   image_count: number;
   /**

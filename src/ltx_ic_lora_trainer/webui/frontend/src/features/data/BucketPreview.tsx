@@ -83,9 +83,9 @@ export function BucketPreview({ datasetIndex, width, height, trainer }: BucketPr
 
   return (
     <div className="space-y-2">
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-        Bucket preview · {data.scanned} file{data.scanned === 1 ? "" : "s"} scanned
-      </div>
+      <p className="text-[10px] text-muted-foreground">
+        {data.scanned} file{data.scanned === 1 ? "" : "s"} scanned
+      </p>
       <div className="space-y-1.5">
         {data.buckets.map((b) => (
           <BucketRow key={`${b.resolution[0]}x${b.resolution[1]}`} bucket={b} maxCount={maxCount} />
@@ -142,18 +142,11 @@ function BucketRow({
 
   return (
     <div>
-      {/* Bar track */}
-      <div className="relative h-1.5 overflow-hidden rounded-sm bg-muted/30">
-        <div
-          className="absolute inset-y-0 left-0 bg-primary/70"
-          style={{ width: `${pct}%` }}
-        />
-      </div>
       {/* Label row */}
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="mt-0.5 flex w-full items-center justify-between gap-2 text-[11px] hover:text-foreground"
+        className="flex w-full items-center justify-between gap-2 text-[10px] mb-0.5 hover:text-foreground"
       >
         <span className="flex items-center gap-1.5 text-muted-foreground">
           {expanded ? (
@@ -161,12 +154,19 @@ function BucketRow({
           ) : (
             <ChevronRight className="size-3 shrink-0" />
           )}
-          <span className="font-mono">{w}×{h}</span>
-          <span className="text-muted-foreground/70">·</span>
-          <span>{aspectLabel}</span>
+          <span className="font-mono text-foreground">{w}×{h}</span>
+          <span className="text-muted-foreground/50">·</span>
+          <span className="text-muted-foreground/80">{aspectLabel}</span>
         </span>
         <span className="tabular-nums font-medium text-foreground">{bucket.count}</span>
       </button>
+      {/* Bar track */}
+      <div className="relative h-2 overflow-hidden rounded-sm bg-muted/40">
+        <div
+          className="absolute inset-y-0 left-0 rounded-sm bg-primary/60"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
       {expanded && (
         <ul className="mt-1 max-h-32 overflow-y-auto pl-5 text-[10px] text-muted-foreground scrollbar-thin">
           {bucket.items.map((name) => (
