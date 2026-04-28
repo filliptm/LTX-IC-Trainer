@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { FormProvider, useForm } from "react-hook-form";
 import { Save } from "lucide-react";
 import { toast } from "sonner";
@@ -12,6 +12,7 @@ import {
   SelectField,
 } from "@/features/project/FormFields";
 import { BucketPreview } from "./BucketPreview";
+import { DurationPreview } from "./DurationPreview";
 
 interface DatasetSettingsProps {
   datasetIndex: number;
@@ -66,6 +67,35 @@ export function DatasetSettings({ datasetIndex }: DatasetSettingsProps) {
   // the target dimensions (debounced inside the component itself).
   const watchedW = methods.watch("resolution_w");
   const watchedH = methods.watch("resolution_h");
+  // Trainer-effective video options drive the sample-count estimate inside
+  // <DurationPreview>. We watch them all here at the parent so both
+  // <BucketPreview> and <DurationPreview> see the same `trainer` reference
+  // and share a single /buckets request via TanStack Query's structural
+  // cache key.
+  const watchedTargetFrames = methods.watch("target_frames");
+  const watchedFrameExtraction = methods.watch("frame_extraction");
+  const watchedFrameStride = methods.watch("frame_stride");
+  const watchedFrameSample = methods.watch("frame_sample");
+  const watchedTargetFps = methods.watch("target_fps");
+  const watchedMaxFrames = methods.watch("max_frames");
+  const trainerParams = useMemo(
+    () => ({
+      target_frames: Number(watchedTargetFrames) || null,
+      frame_extraction: watchedFrameExtraction || null,
+      frame_stride: watchedFrameStride ?? null,
+      frame_sample: watchedFrameSample ?? null,
+      target_fps: watchedTargetFps ?? null,
+      max_frames: watchedMaxFrames ?? null,
+    }),
+    [
+      watchedTargetFrames,
+      watchedFrameExtraction,
+      watchedFrameStride,
+      watchedFrameSample,
+      watchedTargetFps,
+      watchedMaxFrames,
+    ],
+  );
 
   const handleSave = methods.handleSubmit(async (data) => {
     if (!project?.config) return;
@@ -87,7 +117,7 @@ export function DatasetSettings({ datasetIndex }: DatasetSettingsProps) {
   if (!entry) return null;
 
   return (
-    <div className="flex h-full w-80 shrink-0 flex-col border-l border-border">
+    <div className="flex h-full w-[400px] shrink-0 flex-col border-l border-border">
       <div className="relative flex h-10 shrink-0 items-center justify-center border-b border-border px-3">
         <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Settings
@@ -163,6 +193,15 @@ export function DatasetSettings({ datasetIndex }: DatasetSettingsProps) {
                 datasetIndex={datasetIndex}
                 width={Number(watchedW)}
                 height={Number(watchedH)}
+                trainer={trainerParams}
+              />
+            </div>
+            <div className="rounded-md border border-border/60 bg-muted/20 p-3">
+              <DurationPreview
+                datasetIndex={datasetIndex}
+                width={Number(watchedW)}
+                height={Number(watchedH)}
+                trainer={trainerParams}
               />
             </div>
             <NumberField

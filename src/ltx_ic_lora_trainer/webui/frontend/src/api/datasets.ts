@@ -171,6 +171,25 @@ export interface BucketRow {
   items: string[];
 }
 
+export interface DurationBin {
+  label: string;
+  min_s: number;
+  /** null marks the open-ended top bin (e.g. "30s+"). */
+  max_s: number | null;
+  count: number;
+}
+
+export interface DurationDistribution {
+  bins: DurationBin[];
+  count: number;
+  total_s: number;
+  avg_s: number;
+  p50: number;
+  p95: number;
+  min_s: number;
+  max_s: number;
+}
+
 export interface DatasetBucketsResponse {
   target_area: number;
   target_resolution: [number, number];
@@ -178,6 +197,26 @@ export interface DatasetBucketsResponse {
   unreadable: string[];
   scanned: number;
   truncated: boolean;
+  /** Histogram + summary stats over source-clip durations (videos only). */
+  duration_distribution: DurationDistribution;
+  video_count: number;
+  image_count: number;
+  /**
+   * Estimated number of training samples the loader will produce with the
+   * current target_frames / frame_extraction / target_fps / etc. — counts
+   * each image as one sample plus the per-video chunking estimate.
+   */
+  estimated_training_samples: number;
+}
+
+/** Per-call trainer-effective parameters for the sample-count estimator. */
+export interface DatasetBucketsTrainerParams {
+  target_frames?: number | null;
+  frame_extraction?: string | null;
+  frame_stride?: number | null;
+  frame_sample?: number | null;
+  target_fps?: number | null;
+  max_frames?: number | null;
 }
 
 export function useDatasetBuckets(
@@ -185,14 +224,32 @@ export function useDatasetBuckets(
   width: number | null,
   height: number | null,
   slot: "target" | "reference" = "target",
+  trainer: DatasetBucketsTrainerParams = {},
 ) {
   return useQuery<DatasetBucketsResponse>({
-    queryKey: ["dataset", datasetIndex, "buckets", slot, width, height],
+    queryKey: [
+      "dataset",
+      datasetIndex,
+      "buckets",
+      slot,
+      width,
+      height,
+      trainer,
+    ],
     queryFn: () => {
       const qs = new URLSearchParams();
       if (width != null) qs.set("width", String(width));
       if (height != null) qs.set("height", String(height));
       qs.set("slot", slot);
+      // Forward only well-formed trainer params; the backend defaults to
+      // the saved DatasetEntry values for any param we omit here.
+      const t = trainer;
+      if (t.target_frames != null && t.target_frames > 0) qs.set("target_frames", String(t.target_frames));
+      if (t.frame_extraction) qs.set("frame_extraction", t.frame_extraction);
+      if (t.frame_stride != null && t.frame_stride > 0) qs.set("frame_stride", String(t.frame_stride));
+      if (t.frame_sample != null && t.frame_sample > 0) qs.set("frame_sample", String(t.frame_sample));
+      if (t.target_fps != null && t.target_fps > 0) qs.set("target_fps", String(t.target_fps));
+      if (t.max_frames != null && t.max_frames > 0) qs.set("max_frames", String(t.max_frames));
       return api.get<DatasetBucketsResponse>(
         `/api/dataset/${datasetIndex}/buckets?${qs.toString()}`,
       );

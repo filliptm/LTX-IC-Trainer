@@ -1,13 +1,21 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, ChevronDown, ChevronRight } from "lucide-react";
 
-import { useDatasetBuckets } from "@/api/datasets";
+import { useDatasetBuckets, type DatasetBucketsTrainerParams } from "@/api/datasets";
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface BucketPreviewProps {
   datasetIndex: number;
   width: number;
   height: number;
+  /**
+   * Trainer-effective parameters forwarded to /buckets so this component
+   * shares its cache key with <DurationPreview>. The bucket result itself
+   * doesn't depend on these values, but the response also carries the
+   * sample-count estimate — sharing the key is what dedupes the two
+   * components into a single network request.
+   */
+  trainer?: DatasetBucketsTrainerParams;
 }
 
 /**
@@ -24,16 +32,23 @@ interface BucketPreviewProps {
  * image_video_dataset.py:458-462, which only fires for clips smaller than
  * the target. For an overview histogram that's an acceptable approximation.
  */
-export function BucketPreview({ datasetIndex, width, height }: BucketPreviewProps) {
+const EMPTY_TRAINER: DatasetBucketsTrainerParams = {};
+
+export function BucketPreview({ datasetIndex, width, height, trainer }: BucketPreviewProps) {
   // Debounce input dimensions by 300ms so we don't spam the backend while
   // the user is still typing into the resolution fields.
   const debouncedW = useDebounced(width, 300);
   const debouncedH = useDebounced(height, 300);
+  // Stable empty fallback so an undefined `trainer` doesn't churn the
+  // debouncer with a fresh object reference on every render.
+  const debouncedTrainer = useDebounced(trainer ?? EMPTY_TRAINER, 300);
 
   const { data, isLoading, isError } = useDatasetBuckets(
     datasetIndex,
     debouncedW,
     debouncedH,
+    "target",
+    debouncedTrainer,
   );
 
   const [showUnreadable, setShowUnreadable] = useState(false);

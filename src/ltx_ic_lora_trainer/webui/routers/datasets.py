@@ -100,37 +100,186 @@ def _nearest_bucket(image_size: tuple[int, int], buckets: list[tuple[int, int]])
     return min(buckets, key=lambda b: abs((b[0] / b[1]) - aspect))
 
 
-def _probe_image(path: str) -> Optional[tuple[int, int]]:
+class _MediaInfo(BaseModel):
+    """Container header info for a media file. All reads are O(header) — no decode."""
+    width: int
+    height: int
+    frame_count: Optional[int] = None  # videos only
+    fps: Optional[float] = None  # videos only
+
+    @property
+    def duration_s(self) -> Optional[float]:
+        if self.frame_count and self.fps and self.fps > 0:
+            return self.frame_count / self.fps
+        return None
+
+
+def _probe_image(path: str) -> Optional[_MediaInfo]:
     """Header-only read; PIL.Image.open is lazy and only reads metadata for .size."""
     try:
         from PIL import Image
         with Image.open(path) as im:
-            return im.size
+            w, h = im.size
+        return _MediaInfo(width=w, height=h)
     except Exception:
         return None
 
 
-def _probe_video(path: str) -> Optional[tuple[int, int]]:
-    """Container-only read; cv2.VideoCapture.get(CAP_PROP_FRAME_*) doesn't decode."""
+def _probe_video(path: str) -> Optional[_MediaInfo]:
+    """Container-only read; cv2.VideoCapture.get(...) reads only the header.
+
+    We pull width, height, frame count, and fps from the same capture handle —
+    a single I/O round-trip per file. Some containers report frame_count = 0
+    even for valid files (older variable-bitrate webm, certain transcodes);
+    we still return width/height so the bucket preview keeps working.
+    """
     try:
         import cv2
         cap = cv2.VideoCapture(path)
         try:
             w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
             h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            fc = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            fps = float(cap.get(cv2.CAP_PROP_FPS))
         finally:
             cap.release()
-        return (w, h) if w > 0 and h > 0 else None
+        if w <= 0 or h <= 0:
+            return None
+        return _MediaInfo(
+            width=w,
+            height=h,
+            frame_count=fc if fc > 0 else None,
+            fps=fps if fps > 0 else None,
+        )
     except Exception:
         return None
 
 
-def _probe_dimensions(path: str, ext_kind: str) -> Optional[tuple[int, int]]:
+def _probe_media(path: str, ext_kind: str) -> Optional[_MediaInfo]:
     if ext_kind == "image":
         return _probe_image(path)
     if ext_kind == "video":
         return _probe_video(path)
     return None  # audio + unknown skipped
+
+
+# Duration histogram bins (seconds). Open at the top end via "30+".
+_DURATION_BINS = [
+    ("0-2s", 0.0, 2.0),
+    ("2-5s", 2.0, 5.0),
+    ("5-10s", 5.0, 10.0),
+    ("10-30s", 10.0, 30.0),
+    ("30s+", 30.0, float("inf")),
+]
+
+
+def _build_duration_distribution(durations: list[float]) -> dict:
+    """Bin a list of clip durations and compute summary stats.
+
+    Returns the shape consumed by DurationPreview on the frontend:
+    bins, total_s, avg_s, p50, p95, count.
+    """
+    if not durations:
+        return {
+            "bins": [{"label": label, "min_s": lo, "max_s": (None if hi == float("inf") else hi), "count": 0}
+                     for label, lo, hi in _DURATION_BINS],
+            "count": 0,
+            "total_s": 0.0,
+            "avg_s": 0.0,
+            "p50": 0.0,
+            "p95": 0.0,
+            "min_s": 0.0,
+            "max_s": 0.0,
+        }
+    bins = []
+    for label, lo, hi in _DURATION_BINS:
+        n = sum(1 for d in durations if lo <= d < hi)
+        bins.append({
+            "label": label,
+            "min_s": lo,
+            "max_s": (None if hi == float("inf") else hi),
+            "count": n,
+        })
+    sorted_durs = sorted(durations)
+    n = len(sorted_durs)
+    p50 = sorted_durs[n // 2]
+    # p95 with the standard nearest-rank formula
+    p95_idx = max(0, min(n - 1, int(round(0.95 * (n - 1)))))
+    p95 = sorted_durs[p95_idx]
+    return {
+        "bins": bins,
+        "count": n,
+        "total_s": sum(durations),
+        "avg_s": sum(durations) / n,
+        "p50": p50,
+        "p95": p95,
+        "min_s": sorted_durs[0],
+        "max_s": sorted_durs[-1],
+    }
+
+
+def _estimate_training_samples(
+    durations_with_frames: list[tuple[float, int, float]],
+    target_frames: int,
+    frame_extraction: str,
+    frame_stride: Optional[int],
+    frame_sample: Optional[int],
+    target_fps: Optional[float],
+    max_frames: Optional[int],
+) -> int:
+    """Estimate how many training samples the loader will produce.
+
+    Mirrors the per-video chunking logic the trainer does at sampling time.
+    Inputs are tuples of (duration_s, source_frame_count, source_fps); only
+    the frame count after temporal-resample to `target_fps` is used to
+    decide chunking. Each strategy:
+
+        head    → 1 sample if effective_frames >= target_frames, else 0
+        chunk   → effective_frames // target_frames (non-overlapping)
+        slide   → 1 + (effective_frames - target_frames) // stride  (frames-fit)
+        uniform → 1 sample if effective_frames >= target_frames, else 0
+        full    → 1 sample if effective_frames == target_frames, else 0
+
+    `frame_sample`, when set, caps the per-video output to that many.
+    `max_frames`, when set, truncates the source frame count first.
+
+    This is an estimate — the real loader may differ in edge cases — but
+    it's accurate enough for the "you'll produce ~N training samples"
+    line. Returns 0 if target_frames is invalid.
+    """
+    if target_frames <= 0:
+        return 0
+    total = 0
+    stride = frame_stride if frame_stride and frame_stride > 0 else target_frames
+    cap = frame_sample if frame_sample and frame_sample > 0 else None
+    for duration_s, src_frames, src_fps in durations_with_frames:
+        if src_frames <= 0:
+            continue
+        # Apply target_fps resample (drops frames; loader rarely upsamples).
+        if target_fps and target_fps > 0 and src_fps > 0:
+            effective = int(src_frames * target_fps / src_fps)
+        else:
+            effective = src_frames
+        # Apply max_frames truncation.
+        if max_frames and max_frames > 0:
+            effective = min(effective, max_frames)
+        if effective < target_frames:
+            continue
+
+        if frame_extraction == "head" or frame_extraction == "uniform":
+            n = 1
+        elif frame_extraction == "chunk":
+            n = effective // target_frames
+        elif frame_extraction == "slide":
+            n = 1 + (effective - target_frames) // stride
+        elif frame_extraction == "full":
+            n = 1 if effective == target_frames else 0
+        else:
+            n = 1
+        if cap is not None:
+            n = min(n, cap)
+        total += n
+    return total
 
 
 # ---------------------------------------------------------------------------
@@ -546,9 +695,19 @@ async def get_dataset_buckets(
     height: Optional[int] = Query(None, ge=64, le=8192),
     slot: str = Query("target"),
     max_files: int = Query(2000, ge=1, le=10000),
+    # Trainer-effective sample-count estimation. Defaults from the entry are
+    # filled in below — the frontend passes the live form values so the
+    # number updates as the user edits the video options.
+    target_frames: Optional[int] = Query(None, ge=1, le=4096),
+    frame_extraction: Optional[str] = Query(None),
+    frame_stride: Optional[int] = Query(None, ge=1),
+    frame_sample: Optional[int] = Query(None, ge=1),
+    target_fps: Optional[float] = Query(None, gt=0),
+    max_frames: Optional[int] = Query(None, ge=1),
 ):
     """Preview which LTX-2 buckets the dataset's files will land in for a
-    given target (W, H) area.
+    given target (W, H) area, plus a duration histogram and an estimated
+    training-sample count.
 
     The trainer (BucketSelector) generates a 32-pixel-grid family of bucket
     resolutions sharing the target area, in both portrait and landscape
@@ -556,6 +715,11 @@ async def get_dataset_buckets(
     This route reproduces that math without importing the dataset code, so
     the UI can show "given my target area + my files, here's what training
     will actually use."
+
+    For videos we additionally read frame count + FPS from the same cv2
+    capture handle (zero extra I/O), build a duration histogram, and run a
+    quick estimator that simulates the loader's chunk/slide/head/uniform
+    logic to predict how many training samples the dataset will produce.
 
     Empty / unreadable / capped cases all return 200 with a structured
     response — the frontend renders graceful states.
@@ -586,21 +750,41 @@ async def get_dataset_buckets(
     if not os.path.isdir(real_base):
         raise HTTPException(status_code=404, detail="Dataset directory not found")
 
+    # Resolve trainer-effective defaults from the dataset entry so a caller
+    # that just hits /buckets with no extra params still gets a meaningful
+    # sample-count estimate.
+    eff_target_frames = target_frames if target_frames is not None else entry.target_frames
+    eff_frame_extraction = frame_extraction if frame_extraction is not None else entry.frame_extraction
+    eff_frame_stride = frame_stride if frame_stride is not None else entry.frame_stride
+    eff_frame_sample = frame_sample if frame_sample is not None else entry.frame_sample
+    eff_target_fps = target_fps if target_fps is not None else entry.target_fps
+    eff_max_frames = max_frames if max_frames is not None else entry.max_frames
+
     buckets = _compute_buckets(target_w, target_h)
+    empty_response = {
+        "target_area": target_w * target_h,
+        "target_resolution": [target_w, target_h],
+        "buckets": [],
+        "unreadable": [],
+        "scanned": 0,
+        "truncated": False,
+        "duration_distribution": _build_duration_distribution([]),
+        "video_count": 0,
+        "image_count": 0,
+        "estimated_training_samples": 0,
+    }
     if not buckets:
-        return {
-            "target_area": target_w * target_h,
-            "target_resolution": [target_w, target_h],
-            "buckets": [],
-            "unreadable": [],
-            "scanned": 0,
-            "truncated": False,
-        }
+        return empty_response
 
     assignments: dict[tuple[int, int], list[str]] = {}
     unreadable: list[str] = []
     scanned = 0
     truncated = False
+    durations: list[float] = []
+    video_count = 0
+    image_count = 0
+    # Per-video tuples driving the sample-count estimator.
+    durations_with_frames: list[tuple[float, int, float]] = []
 
     try:
         names = sorted(os.listdir(real_base))
@@ -627,15 +811,25 @@ async def get_dataset_buckets(
             break
         scanned += 1
 
-        dims = _probe_dimensions(real_full, kind)
-        if dims is None:
+        info = _probe_media(real_full, kind)
+        if info is None:
             unreadable.append(name)
             continue
-        bucket = _nearest_bucket(dims, buckets)
+        bucket = _nearest_bucket((info.width, info.height), buckets)
         if bucket is None:
             unreadable.append(name)
             continue
         assignments.setdefault(bucket, []).append(name)
+
+        if kind == "video":
+            video_count += 1
+            dur = info.duration_s
+            if dur is not None and dur > 0:
+                durations.append(dur)
+            if info.frame_count and info.fps:
+                durations_with_frames.append((dur or 0.0, info.frame_count, info.fps))
+        else:
+            image_count += 1
 
     result_buckets = [
         {
@@ -650,6 +844,21 @@ async def get_dataset_buckets(
         )
     ]
 
+    # Add image samples to the estimator: each image counts as a single
+    # training sample (it's already a fixed-size frame; the trainer treats
+    # it as target_frames=1 conceptually). Duration distribution doesn't
+    # include images.
+    estimated_video_samples = _estimate_training_samples(
+        durations_with_frames,
+        eff_target_frames,
+        eff_frame_extraction,
+        eff_frame_stride,
+        eff_frame_sample,
+        eff_target_fps,
+        eff_max_frames,
+    )
+    estimated_total = estimated_video_samples + image_count
+
     return {
         "target_area": target_w * target_h,
         "target_resolution": [target_w, target_h],
@@ -657,6 +866,10 @@ async def get_dataset_buckets(
         "unreadable": unreadable,
         "scanned": scanned,
         "truncated": truncated,
+        "duration_distribution": _build_duration_distribution(durations),
+        "video_count": video_count,
+        "image_count": image_count,
+        "estimated_training_samples": estimated_total,
     }
 
 
