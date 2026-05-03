@@ -194,7 +194,7 @@ Standalone generator, independent of training. Loads a checkpoint + any LoRAs, g
 **Key flags:**
 
 - **Model**: `--ltx2_checkpoint` (required), `--vae` (optional), `--gemma_root` / `--gemma_safetensors`
-- **LoRA stacking**: `--lora_weight` (can be passed multiple times), `--lora_multiplier` (aligned scales), `--include_patterns` / `--exclude_patterns` for module filtering
+- **LoRA stacking**: `--lora_weight` (can be passed multiple times), `--lora_multiplier` (aligned scales), `--include_patterns` / `--exclude_patterns` for module filtering. ComfyUI/PEFT-format LoRAs (`diffusion_model.*.lora_A.weight` / `.lora_B.weight`) are auto-converted to the trainer's native `lora_unet_*.lora_down.weight` form on load — no manual pre-conversion needed
 - **Dimensions**: `--height`, `--width`, `--frame_count`, `--frame_rate`
 - **Denoising**: `--sample_steps`, `--guidance_scale`, `--cfg_scale`, `--discrete_flow_shift`
 - **Attention backend**: `--attn_mode` (`flash`/`flash3`/`torch`/`xformers`/`sdpa`), or the individual short-flags `--flash_attn` / `--flash3` / `--sdpa` / `--xformers`
@@ -226,6 +226,22 @@ Bakes one or more LoRAs into a base model checkpoint so you can distribute a pre
 - **Output**: `--save_merged_model`
 - **Flags**: `--device`, `--audio_video`, `--audio_only` (variant selection)
 - **Metadata**: preserves original metadata and adds `merged_loras`, `merged_multipliers` keys so you can see what went in
+
+### 9. `ltx_2/convert_lora_to_comfy.py` — LoRA key-format converter
+
+Converts LoRA files between the trainer's native key format (`lora_unet_*.lora_down.weight` / `.lora_up.weight`) and the ComfyUI/PEFT format (`diffusion_model.*.lora_A.weight` / `.lora_B.weight`). Inference and merge entry points auto-convert on load, so this CLI is mainly useful for redistributing LoRAs in a target format.
+
+```bash
+# Trainer → ComfyUI (default direction)
+python -m ltx_ic_lora_trainer.ltx_2.convert_lora_to_comfy <input.safetensors>
+# → writes <input>.comfy.safetensors
+
+# ComfyUI → Trainer
+python -m ltx_ic_lora_trainer.ltx_2.convert_lora_to_comfy --reverse <input.safetensors>
+# → writes <input>.kohya.safetensors
+```
+
+The reverse direction recreates `.alpha=rank` buffers (ComfyUI checkpoints fold scale into weights and don't store alpha separately). Metadata is preserved in both directions.
 
 ## Sampling internals: `ltx2_sampling.py` → `LTX2SamplingMixin`
 
