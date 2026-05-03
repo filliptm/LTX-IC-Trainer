@@ -305,20 +305,74 @@ def convert_lora_to_comfy(input_path, output_path=None, verbose=False):
     return output_path
 
 
+def convert_lora_from_comfy(input_path, output_path=None, verbose=False):
+    """
+    Convert a LoRA file from ComfyUI format to training format.
+
+    Inverse of :func:`convert_lora_to_comfy`. Useful when feeding externally
+    distributed LoRAs (e.g. the official Lightricks distilled LoRA, ComfyUI
+    community LoRAs) into the trainer's inference / merge entry points, which
+    expect ``lora_unet_*.lora_down.weight`` / ``.lora_up.weight`` keys.
+
+    Args:
+        input_path: Path to the input LoRA file (ComfyUI format).
+        output_path: Path to save the converted LoRA (optional).
+        verbose: Print detailed conversion info.
+
+    Returns:
+        Path to the output file.
+    """
+    print(f"Loading LoRA from: {input_path}")
+
+    comfy_state_dict = safetensors.torch.load_file(input_path)
+    print(f"Input LoRA has {len(comfy_state_dict)} keys")
+
+    converted_state_dict = convert_lora_from_comfy_state_dict(comfy_state_dict)
+    print(f"Output LoRA has {len(converted_state_dict)} keys")
+
+    if output_path is None:
+        input_file = Path(input_path)
+        stem = input_file.stem
+        if stem.endswith(".comfy"):
+            stem = stem[: -len(".comfy")]
+        output_path = input_file.parent / f"{stem}.kohya{input_file.suffix}"
+
+    metadata = None
+    try:
+        with safetensors.safe_open(input_path, framework="pt") as f:
+            metadata = f.metadata()
+        if metadata:
+            print(f"Preserving {len(metadata)} metadata entries")
+    except Exception as e:
+        print(f"Warning: Could not read metadata: {e}")
+
+    print(f"\nSaving training-format LoRA to: {output_path}")
+    safetensors.torch.save_file(converted_state_dict, output_path, metadata=metadata)
+
+    print("[OK] Conversion complete!")
+
+    return output_path
+
+
 def main():
     parser = argparse.ArgumentParser(
-        description="Convert LTX-2 LoRA from training format to ComfyUI format"
+        description="Convert LTX-2 LoRA between training format and ComfyUI format"
     )
     parser.add_argument(
         "input",
         type=str,
-        help="Path to the input LoRA file (training format)"
+        help="Path to the input LoRA file"
     )
     parser.add_argument(
         "-o", "--output",
         type=str,
         default=None,
-        help="Path to save the converted LoRA (default: <input>.comfy.safetensors)"
+        help="Path to save the converted LoRA (default: <input>.comfy.safetensors, or <input>.kohya.safetensors with --reverse)"
+    )
+    parser.add_argument(
+        "-r", "--reverse",
+        action="store_true",
+        help="Convert from ComfyUI format to training format (default direction is training → ComfyUI)"
     )
     parser.add_argument(
         "-v", "--verbose",
@@ -333,7 +387,10 @@ def main():
         return 1
 
     try:
-        output_path = convert_lora_to_comfy(args.input, args.output, args.verbose)
+        if args.reverse:
+            convert_lora_from_comfy(args.input, args.output, args.verbose)
+        else:
+            convert_lora_to_comfy(args.input, args.output, args.verbose)
         return 0
     except Exception as e:
         print(f"Error during conversion: {e}")

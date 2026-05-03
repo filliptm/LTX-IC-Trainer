@@ -249,6 +249,13 @@ def _merge_lora_weights(
         logger.info("Merging LoRA: %s (multiplier=%.3f)", path, multiplier)
         lora_sd = load_file(path)
 
+        # Normalise external LoRA key formats (e.g. ComfyUI/PEFT `diffusion_model.*.lora_A.weight`)
+        # into the trainer's native `lora_unet_*.lora_down.weight` form. Without this, a comfy-format
+        # LoRA silently zero-merges (create_arch_network logs "0 modules") and the output is base-only.
+        converted_sd = lora_ltx2.convert_weight_keys(lora_sd)
+        if converted_sd is not None:
+            lora_sd = converted_sd
+
         # Auto-detect connector LoRA and attach connectors to wrapper for merge
         has_connector_lora = any("embeddings_connector" in k for k in lora_sd.keys())
         if has_connector_lora and not getattr(transformer, "has_connectors", lambda: False)():
